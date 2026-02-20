@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Custom Utilities */
+body {
+  @apply bg-slate-900 text-white font-sans antialiased;
+}
