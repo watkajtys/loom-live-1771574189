@@ -20,9 +20,11 @@ class ConductorState(BaseModel):
     active_branch: str = "main"
     inspiration_goal: str = ""
     history: List[LoopIteration] = []
+    stitch_project_id: Optional[str] = None
+    stitch_screen_id: Optional[str] = None
     
     def save(self):
-        with open(STATE_FILE, "w") as f:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
             f.write(self.model_dump_json(indent=2))
     
     @classmethod

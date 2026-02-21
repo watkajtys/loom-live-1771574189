@@ -5,3 +5,4 @@ psutil
 tenacity
 requests
 python-dotenv
+playwright

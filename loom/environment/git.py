@@ -12,10 +12,18 @@ class GitClient(AgentProxy):
         self._run(["git", "init"], cwd="app")
     
     def checkout_branch(self, branch_name: str):
-        try:
+        self._run(["git", "reset", "--hard"], cwd="app")
+        self._run(["git", "clean", "-fd"], cwd="app")
+        
+        if branch_name == "main":
+            self._run(["git", "checkout", "main"], cwd="app")
+        else:
+            self._run(["git", "checkout", "main"], cwd="app")
+            try:
+                self._run(["git", "branch", "-D", branch_name], cwd="app")
+            except:
+                pass
             self._run(["git", "checkout", "-b", branch_name], cwd="app")
-        except:
-            self._run(["git", "checkout", branch_name], cwd="app")
             
     def commit(self, message: str) -> Optional[str]:
         self._run(["git", "add", "."], cwd="app")
@@ -28,7 +36,7 @@ class GitClient(AgentProxy):
             
     def push_branch(self, branch_name: str):
         try:
-            self._run(["git", "push", "-u", "origin", branch_name], cwd="app")
+            self._run(["git", "push", "-f", "-u", "origin", branch_name], cwd="app")
         except Exception as e:
             logger.error(f"Failed to push branch: {e}")
             raise

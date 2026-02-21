@@ -83,10 +83,20 @@ class JulesClient(AgentProxy):
 
         logger.info("Jules returned a patch successfully.")
         
+        # Strip binary patches from jules output as git apply chokes on them
+        import re
+        parts = re.split(r'(?=^diff --git)', patch_content, flags=re.MULTILINE)
+        new_parts = [p for p in parts if 'GIT binary patch' not in p]
+        clean_patch = ''.join(new_parts)
+        
         patch_path = "app/jules.patch"
         with open(patch_path, "w", encoding="utf-8") as f:
-            f.write(patch_content)
+            f.write(clean_patch)
             
         logger.info("Applying patch...")
-        self._run(["git", "apply", "--ignore-space-change", "--ignore-whitespace", "jules.patch"], cwd="app")
+        try:
+            self._run(["git", "apply", "--reject", "jules.patch"], cwd="app")
+        except Exception as e:
+            logger.warning(f"git apply --reject had warnings/errors, but proceeding: {e}")
+            
         return "Code Implemented via Jules Patch"

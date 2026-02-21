@@ -29,14 +29,19 @@ class PhoenixServer:
     def spawn(self):
         """Starts the Vite server in the background."""
         self.kill() # Ensure clean slate
+        import os
         logger.info("Spawning Phoenix Server (Vite)...")
         try:
+            if not os.path.exists("app/node_modules"):
+                logger.info("Running npm install in app directory...")
+                subprocess.run(["npm", "install"], cwd="app", shell=True, check=True)
+            
             # Using shell=True for Windows compatibility with npm
             self.process = subprocess.Popen(
                 ["npm", "run", "dev"], 
                 cwd="app",
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 shell=True
             )
         except Exception as e:
