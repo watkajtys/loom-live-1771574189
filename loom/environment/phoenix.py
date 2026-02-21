@@ -32,9 +32,16 @@ class PhoenixServer:
         import os
         logger.info("Spawning Phoenix Server (Vite)...")
         try:
-            if not os.path.exists("app/node_modules"):
-                logger.info("Running npm install in app directory...")
-                subprocess.run(["npm", "install"], cwd="app", shell=True, check=True)
+            logger.info("Running npm install in app directory...")
+            # Always run npm install in case Jules added new dependencies to package.json
+            subprocess.run(
+                ["npm", "install", "--no-audit", "--no-fund"], 
+                cwd="app", 
+                shell=True, 
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
             
             # Using shell=True for Windows compatibility with npm
             self.process = subprocess.Popen(
