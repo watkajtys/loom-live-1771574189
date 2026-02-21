@@ -4,3 +4,6 @@ dist/
 .DS_Store
 viewer/public/artifacts/
 session_state*.json
+__pycache__/
+*.pyc
+.idea/
