@@ -242,7 +242,8 @@ FULL CODEBASE:
                 "dev": "vite",
                 "build": "vite build",
                 "lint": "eslint .",
-                "preview": "vite preview"
+                "preview": "vite preview",
+                "test:e2e": "playwright test"
             },
             "dependencies": {
                 "react": "^19.0.0",
@@ -251,6 +252,8 @@ FULL CODEBASE:
                 "lucide-react": "^0.454.0"
             },
             "devDependencies": {
+                "@playwright/test": "^1.42.0",
+                "@types/node": "^20.11.24",
                 "@vitejs/plugin-react": "^4.3.0",
                 "autoprefixer": "^10.4.19",
                 "postcss": "^8.4.38",
@@ -318,6 +321,39 @@ export default {
 </html>
 """)
 
+        # 5.5 Playwright Config
+        with open("app/playwright.config.ts", "w") as f:
+            f.write("""import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: 'html',
+  use: {
+    baseURL: 'http://localhost:5173',
+    trace: 'on-first-retry',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+});
+""")
+        os.makedirs("app/tests", exist_ok=True)
+        with open("app/tests/example.spec.ts", "w") as f:
+            f.write("""import { test, expect } from '@playwright/test';
+
+test('has title', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveTitle(/Loom App/);
+});
+""")
+
         # 6. Basic SRC files
         with open("app/src/index.css", "w") as f:
             f.write("@tailwind base;\n@tailwind components;\n@tailwind utilities;\n")
@@ -378,15 +414,25 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
                 prompt = f"""
+You are a Product Visionary at a high-end software studio (similar to Teenage Engineering, Panic, or Linear). 
+You only build software that feels like a toy but works like a powerful tool.
+Your core values are:
+1. **Tactile Interactivity:** The user should feel like they are manipulating a physical machine, not just filling out forms.
+2. **Joyful Utility:** The product must solve a real problem, but in a way that induces delight (e.g., sound effects, physics-based UI, fluid transitions).
+3. **Novel Paradigms:** Avoid standard "dashboard" layouts. Invent new ways to visualize and interact with data.
+
 We are starting a brand new React application (using Vite and Tailwind CSS).
 Your task is to generate the seed concept for this project.
 
 [Random Seed for Variety: {int(time.time())}]
 {memory_context}
 
-1. Generate exactly 3 highly distinct, creative ideas for a web application. Ensure the ideas are functionally clear and buildable.
+CRITICAL DIRECTIVE: DO NOT suggest basic "bootcamp" apps (To-Do Lists, Weather, Recipe Books, basic CRMs).
+Focus on "Pro-sumer" utilities, creative engines, or specialized workspaces that feel premium and distinct.
+
+1. Generate exactly 5 highly distinct software concepts. Ensure the ideas are functionally clear and buildable.
 2. For each idea, briefly weigh its potential for a stunning, polished UI and clear interactive functionality.
-3. Rank the 3 ideas. Rank them based on the best balance of VISUAL APPEAL and PRACTICAL UTILITY.
+3. Rank the 5 ideas. Rank them based on the best balance of VISUAL APPEAL and PRACTICAL UTILITY.
 
 CRITICAL: DO NOT describe specific colors, themes, dark/light modes, or exact visual aesthetics in your concept descriptions. Focus ONLY on the structure, features, and UX mechanics. We will let the design engine explore the aesthetic separately.
 
@@ -399,6 +445,9 @@ The URL path where the core feature will live (e.g. /)
 
 [REQUIRES_DESIGN]
 TRUE or FALSE (output FALSE if the feature is purely architectural, like state management or performance optimization, and requires no UI changes)
+
+[TEST_SCENARIO]
+A concise, step-by-step description of how to verify this feature works (e.g. "Click the 'Add' button, type 'Hello' into the input, and verify 'Hello' appears in the list"). This will be used to generate the automated test.
 """
                 raw_response = self.think(prompt)
                 logger.info(f"Brainstorming Output:\n{raw_response}")
@@ -417,10 +466,13 @@ TRUE or FALSE (output FALSE if the feature is purely architectural, like state m
                     req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                     if "FALSE" in req_design_str:
                         requires_design = False
+                        
+                test_scenario = ""
+                if "[TEST_SCENARIO]" in raw_response:
+                    test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
                     
                 logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {requires_design})")
                 self.state.save()
-
             # 2. Iteration Setup
             self.state.current_iteration += 1
             branch_name = f"iter-{self.state.current_iteration}"
@@ -435,6 +487,9 @@ TRUE or FALSE (output FALSE if the feature is purely architectural, like state m
                 requires_design=requires_design,
                 brainstorming_output=current_brainstorm_output
             )
+            # Hack to store test_scenario for use in this loop iteration (not strictly persisted in state object yet, but available in local scope)
+            # In a real refactor, we should add test_scenario to LoopIteration model.
+            
             self.state.history.append(iteration_record)
             self.state.save()
             
@@ -703,7 +758,7 @@ TRUE or FALSE (output FALSE if the feature is purely architectural, like state m
                 except:
                     self.git._run(["git", "checkout", attempt_branch], cwd="app")
 
-                # 4. Build (Jules)
+                # 4. Build & Test Generation (Jules)
                 memory_context = ""
                 if self.state.repo_memory.get("learnings"):
                     memory_context = "\nPast Learnings:\n"
@@ -720,9 +775,12 @@ Target Route: {current_target_route}
 {memory_context}
 
 The design files are in app/design. 
-CRITICAL: Integrate this new feature into the existing application. 
-If '{current_target_route}' is a new route, you MUST set up React Router (using react-router-dom) without breaking the existing pages.
-Ensure the final app compiles and matches the design.
+CRITICAL RULES:
+1. Integrate this new feature into the existing application. 
+2. If '{current_target_route}' is a new route, set up React Router without breaking existing pages.
+3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`). 
+4. You MUST write a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{test_scenario}".
+5. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
 """
                     else:
                         task_prompt = f"""
@@ -731,14 +789,29 @@ App Identity: {self.state.app_meta}
 Target Route: {current_target_route}
 {memory_context}
 
-CRITICAL: This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout. Focus purely on the underlying React logic, state management, or architecture as requested. Ensure the app still compiles and functions correctly.
+CRITICAL RULES:
+1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout. 
+2. Focus purely on the underlying React logic, state management, or architecture as requested.
+3. You MUST write or update a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{test_scenario}".
+4. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`.
 """
                 else:
                     past_critiques = ""
-                    if iteration_record.attempts:
+                    if iteration_record.attempts:     
                         last_att = iteration_record.attempts[-1]
                         past_critiques += f"\nPrevious Attempt {last_att.attempt_number} (Score: {last_att.score}/10) Critique:\n{last_att.critique}\n"
-                    task_prompt = f"Refine the implementation. Meta: {self.state.app_meta}. Route: {current_target_route}. Feedback: {past_critiques}"
+                    task_prompt = f"""Refine the implementation. 
+Meta: {self.state.app_meta}. 
+Route: {current_target_route}. 
+{memory_context}
+
+CRITICAL RULES:
+1. You MUST include or update the Playwright test in `app/tests/verify.spec.ts`.
+2. Review the following feedback/errors from the previous attempt. If a Playwright test failed, fix the React code or the test script to resolve the error.
+
+Feedback:
+{past_critiques}
+"""
 
                 self.git.push_branch(attempt_branch)
                 owner, repo_name = self._get_repo_info()
@@ -786,10 +859,50 @@ CRITICAL: This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or l
                     build_success = False
                     build_error = str(e)
                 
+                test_success = True
+                test_error = ""
+                if build_success:
+                    logger.info("Verifying Playwright Integration Tests...")
+                    self.phoenix.spawn()
+                    self.phoenix.wait_for_ready()     
+                    try:
+                        # Install playwright browsers if not present
+                        subprocess.run(["npx", "playwright", "install", "chromium"], cwd="app", check=True, capture_output=True, text=True, shell=True)
+                        result = subprocess.run(["npx", "playwright", "test"], cwd="app", capture_output=True, text=True, shell=True)
+                        if result.returncode != 0:    
+                            test_success = False      
+                            test_error = result.stderr or result.stdout
+                        
+                                                # Check for Evidence
+                        if os.path.exists("app/evidence.png"):
+                            ts = int(time.time())
+                            evidence_path = f"viewer/public/artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_evidence_{ts}.png"
+                            shutil.move("app/evidence.png", evidence_path)
+                            app_screenshot_path = f"artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_evidence_{ts}.png"
+                            app_screenshot = None # We have the file, we don't need the bytes for memory
+                            logger.info(f"Evidence captured: {evidence_path}")
+                        else:
+                            logger.warning("No evidence.png found. Test might have failed before screenshot.")
+                            # Fallback: Take a screenshot of the current state for debugging
+                            try:
+                                app_screenshot = self._take_screenshot(f"http://localhost:{self.phoenix.port}/", wait_ms=2000)
+                            except Exception as e:
+                                logger.error(f"Fallback screenshot failed: {e}")
+                            
+                    except Exception as e:
+                        test_success = False
+                        test_error = str(e)
+                    finally:
+                        self.phoenix.kill()
+
                 if not build_success:
                     happiness = 0
                     last_critique = f"The application failed to compile. Build error:\n{build_error[:1000]}"
                     app_screenshot = None
+                elif not test_success:
+                    happiness = 0
+                    last_critique = f"The Playwright integration tests failed. Test output:\n{test_error[:1500]}"
+                    # app_screenshot might be populated from fallback above
                 else:
                     if requires_design:
                         happiness, last_critique, app_screenshot = self.evaluate_happiness(target_route=current_target_route)
@@ -905,6 +1018,9 @@ The URL path (existing or new) where this will be visible.
 [REQUIRES_DESIGN]
 TRUE or FALSE (output FALSE if the feature is purely architectural, like state management or performance optimization, and requires no UI changes)
 
+[TEST_SCENARIO]
+A concise, step-by-step description of how to verify this feature works (e.g. "Click the 'Add' button, type 'Hello' into the input, and verify 'Hello' appears in the list"). This will be used to generate the automated test.
+
 [APP_META]
 Update the App Meta if you are adding new global systems or routes.
 """
@@ -925,6 +1041,10 @@ Update the App Meta if you are adding new global systems or routes.
                         req_design_str = next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                         if "FALSE" in req_design_str:
                             requires_design = False
+                            
+                    test_scenario = ""
+                    if "[TEST_SCENARIO]" in next_idea:
+                        test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
 
                     if "[APP_META]" in next_idea:
                         meta_part = next_idea.split("[APP_META]")[1]
