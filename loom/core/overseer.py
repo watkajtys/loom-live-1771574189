@@ -414,12 +414,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
                 prompt = f"""
-You are a Product Visionary at a high-end software studio (similar to Teenage Engineering, Panic, or Linear). 
-You only build software that feels like a toy but works like a powerful tool.
-Your core values are:
-1. **Tactile Interactivity:** The user should feel like they are manipulating a physical machine, not just filling out forms.
-2. **Joyful Utility:** The product must solve a real problem, but in a way that induces delight (e.g., sound effects, physics-based UI, fluid transitions).
-3. **Novel Paradigms:** Avoid standard "dashboard" layouts. Invent new ways to visualize and interact with data.
+You are a Lead Product Designer at a world-class software studio (think Apple, Airbnb, or Vercel).
+Your specialty is taking standard, useful concepts and executing them with "Impossible Polish" and tactile interactivity.
 
 We are starting a brand new React application (using Vite and Tailwind CSS).
 Your task is to generate the seed concept for this project.
@@ -427,12 +423,17 @@ Your task is to generate the seed concept for this project.
 [Random Seed for Variety: {int(time.time())}]
 {memory_context}
 
-CRITICAL DIRECTIVE: DO NOT suggest basic "bootcamp" apps (To-Do Lists, Weather, Recipe Books, basic CRMs).
-Focus on "Pro-sumer" utilities, creative engines, or specialized workspaces that feel premium and distinct.
+CRITICAL DIRECTIVE: Generate a "Real-World" product that a normal person or professional would immediately understand and want to use. 
+- AVOID: Niche developer tools (no API managers, no regex tools), and AVOID standard "bootcamp" tropes (no basic to-do lists).
+- FOCUS ON: 
+    1. **Personal Finance / Wealth:** Interactive, visual ways to track net worth or project future scenarios.
+    2. **Wellness / Mindset:** High-end spaces for reflection, habit tracking, or meditation that feel "atmospheric."
+    3. **Creative Workspaces:** Sophisticated tools for writers, designers, or collectors to organize their "treasures" or thoughts.
+    4. **Smart Utilities:** Modern versions of clocks, weather stations, or system monitors that feel like physical objects.
 
-1. Generate exactly 5 highly distinct software concepts. Ensure the ideas are functionally clear and buildable.
+1. Generate exactly 5 highly distinct software concepts in these categories. Ensure the ideas are functionally clear and buildable.
 2. For each idea, briefly weigh its potential for a stunning, polished UI and clear interactive functionality.
-3. Rank the 5 ideas. Rank them based on the best balance of VISUAL APPEAL and PRACTICAL UTILITY.
+3. Rank the 5 ideas. Rank them based on the best balance of UNIVERSAL UTILITY and "PREMIUM VIBE."
 
 CRITICAL: DO NOT describe specific colors, themes, dark/light modes, or exact visual aesthetics in your concept descriptions. Focus ONLY on the structure, features, and UX mechanics. We will let the design engine explore the aesthetic separately.
 
