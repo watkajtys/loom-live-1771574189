@@ -112,3 +112,11 @@ A dedicated "Director's Monitor" webapp will visualize the bot's internal state:
 *   **Token Budget:** The Conductor will monitor API usage and halt the loop if it exceeds a set dollar amount.
 *   **Halt Detection:** If the "Happiness Score" doesn't improve for 3 consecutive iterations, the Overseer must pivot its strategy (e.g., "Simplify the design" or "Use a different library").
 - [ ] Retain Jules Run Status in Dashboard: Ensure the active Jules coding session remains visible in the iteration history or dashboard even after the patch is generated, rather than disappearing abruptly, to provide a smoother and more continuous visual experience of the process.
+
+
+## 8. App Meta & Continuity Strategy (The 'Schizophrenic App' Fix)
+*   **The Problem:** Currently, every iteration acts as a blank slate. The Overseer guesses the next feature from a screenshot, Stitch creates a brand-new screen design from scratch (losing the color palette/theme), and Jules attempts to overwrite the entire app to match the new image.
+*   **The Solution:**
+    1.  **APP_META.md:** A source-of-truth document maintaining the core product identity (Name, Theme, Core Colors, Architecture). The Overseer reads this during brainstorming and updates it when adding major systems.
+    2.  **Stateful Design (Stitch):** Do not reset stitch_screen_id to None after an iteration. Pass the previous screen_id back to Stitch so it edits the *existing* design rather than inventing a new one, preserving the visual DNA.
+    3.  **Contextual Coding (Jules):** Prompt Jules with the APP_META.md context and explicitly instruct it to *integrate* new features into the existing architecture rather than overwriting it.
