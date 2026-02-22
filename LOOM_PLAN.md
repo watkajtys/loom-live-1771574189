@@ -120,3 +120,52 @@ A dedicated "Director's Monitor" webapp will visualize the bot's internal state:
     1.  **APP_META.md:** A source-of-truth document maintaining the core product identity (Name, Theme, Core Colors, Architecture). The Overseer reads this during brainstorming and updates it when adding major systems.
     2.  **Stateful Design (Stitch):** Do not reset stitch_screen_id to None after an iteration. Pass the previous screen_id back to Stitch so it edits the *existing* design rather than inventing a new one, preserving the visual DNA.
     3.  **Contextual Coding (Jules):** Prompt Jules with the APP_META.md context and explicitly instruct it to *integrate* new features into the existing architecture rather than overwriting it.
+
+---
+
+## 9. Advanced Factory Evolution (Current Build)
+
+### A. The Triage Highway ([REQUIRES_DESIGN])
+The Overseer now performs a triage check during brainstorming. If a feature is purely architectural (logic/state/performance), it is flagged as `REQUIRES_DESIGN: FALSE`. This triggers a bypass of the Stitch/Vision pipeline, sending the task directly to Jules for faster, more focused execution.
+
+### B. Two-Pass Design System (Layout then Theme)
+To ensure high-quality UI without overwhelming the model, Iteration 1 now executes a two-stage design process:
+1. **Layout Pass**: Stitch generates 3 structural variants. Overseer selects the best layout.
+2. **Theme Pass**: Stitch generates 3 color/typography variants of that layout (including the original as a control). Overseer selects the winner and locks in the `APP_META`.
+
+### C. Persistent Repo Memory (Reflection Pass)
+At the end of every iteration, the Overseer performs a "Reflection Pass," logging technical successes and failures into a persistent `repo_memory` KV store. These learnings are injected into all future brainstorming and implementation prompts to ensure the agents "learn" over time.
+
+### D. Quality Gates: Taste & Touch
+We are moving beyond static vision towards holistic product management:
+1. **Taste Test**: The Overseer evaluates the final app against a "Premium Product" standard. If "vibe" is low, the next goal defaults to a UI Polish pass.
+2. **Touch Test (Planned)**: An interactive Playwright agent will exercise the app's logic (clicking sliders, submitting forms) to verify UX functionality before merging.
+
+---
+
+## 10. Future Horizons (The Ultimate Factory)
+
+To scale Project Loom from a toy to an enterprise factory, we plan to implement specialized asynchronous sentries and workflows:
+
+### A. "Invasion Mode" (Existing Codebases)
+Instead of starting from a blank canvas, Loom will be able to take over existing, legacy codebases.
+1. **Discovery Agent**: Runs local AST parsers and visual crawlers to reverse-engineer an existing app's architecture and design system, automatically generating the initial `APP_META.md`.
+2. **Ticket Ingestion**: Instead of open-ended brainstorming, the Overseer works directly off a GitHub Issues or Jira backlog.
+
+### B. Test-Driven Execution (TDE)
+Static screenshots are insufficient for verifying complex UI logic (e.g., dropdowns, modals, state changes).
+1. **Test Generator**: Overseer tasks a sub-agent to write a Playwright integration test for the new feature *before* it is built.
+2. **Execution**: Jules is handed the failing test script alongside the UI goal and must write React code to make the test pass.
+3. **The Sentry**: Evaluates success based on binary Playwright test execution (`npx playwright test`), eliminating LLM subjectivity.
+
+### C. The "UI Kit" Approach
+To prevent design drift over multiple iterations, Loom will generate a foundational Design System before building the app.
+* **Phase 0**: Overseer tasks Stitch with generating a comprehensive UI Kit (buttons in all states, typography scales, full color palettes).
+* **Phase 1**: The Overseer extracts a massive, robust `APP_META` from this UI Kit, ensuring the app remains perfectly cohesive even at Iteration 50.
+
+### D. Specialized Sentries
+*   **The Lighthouse Agent (a11y):** Fails builds if Jules uses non-semantic HTML (`<div>` instead of `<button>`) or breaks accessibility standards.
+*   **The Web Vitals Sentry:** Fails builds if Jules imports massive libraries that spike the Vite bundle size unexpectedly.
+*   **The Janitor:** A garbage collection agent that runs periodically to find and delete unused React components and dead code via tools like `ts-prune`.
+*   **The AppSec Reviewer:** Scans patches exclusively for XSS vectors, insecure local storage, and hardcoded secrets.
+

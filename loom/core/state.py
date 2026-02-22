@@ -22,11 +22,15 @@ class LoopIteration(BaseModel):
     timestamp: str
     goal: str
     target_route: str = "/"
+    requires_design: bool = True
     brainstorming_output: Optional[str] = None
     design_screenshot_path: Optional[str] = None
     design_variants_paths: List[str] = []
     chosen_design_path: Optional[str] = None
     design_review_critique: Optional[str] = None
+    theme_variants_paths: List[str] = []
+    chosen_theme_path: Optional[str] = None
+    theme_review_critique: Optional[str] = None
     attempts: List[AttemptRecord] = []
     happiness_score: int = 0  # Final score of this iteration
     architectural_critique: Optional[str] = None
@@ -38,6 +42,7 @@ _state_lock = threading.RLock()
 class ConductorState(BaseModel):
     project_name: str = "Loom Experiment"
     app_meta: str = ""
+    repo_memory: dict = {}
     current_iteration: int = 0
     active_branch: str = "main"
     inspiration_goal: str = ""

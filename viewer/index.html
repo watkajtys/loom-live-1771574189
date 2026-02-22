@@ -266,47 +266,76 @@
                                                         </div>
                                                     )}
 
-                                                    {iter.design_variants_paths && iter.design_variants_paths.length > 0 && (
-                                                        <div className="pt-4 pb-6">
-                                                            <div className="px-4 md:px-6 mb-6">
-                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Exploration Variants</span>
-                                                            </div>
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-y border-slate-800">
-                                                                {iter.design_variants_paths.map((vPath, idx) => (
-                                                                    <div 
-                                                                        key={vPath} 
-                                                                        className={`w-full relative cursor-pointer group border-r border-slate-800 last:border-r-0`}
-                                                                        onClick={() => setSelectedImage(`/viewer/public/${vPath}`)}
-                                                                    >
-                                                                        <img src={`/viewer/public/${vPath}`} alt={`Variant ${idx+1}`} className={`w-full h-auto object-contain transition-colors ${state.chosen_design_path === vPath ? 'bg-blue-500/5' : 'group-hover:bg-white/5'}`} style={{ maxHeight: '30vh' }} />
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
+                                                                                                        {iter.design_variants_paths && iter.design_variants_paths.length > 0 && (
+                                                                                                            <div className="pt-4 pb-6">
+                                                                                                                <div className="px-4 md:px-6 mb-6">
+                                                                                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Exploration Variants</span>
+                                                                                                                </div>
+                                                                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-y border-slate-800">
+                                                                                                                    {iter.design_variants_paths.map((vPath, idx) => (
+                                                                                                                        <div
+                                                                                                                            key={vPath}
+                                                                                                                            className={`w-full relative cursor-pointer group border-r border-slate-800 last:border-r-0`}
+                                                                                                                            onClick={() => setSelectedImage(`/viewer/public/${vPath}`)}
+                                                                                                                        >
+                                                                                                                            <img src={`/viewer/public/${vPath}`} alt={`Variant ${idx+1}`} className={`w-full h-auto object-contain transition-colors ${state.chosen_design_path === vPath ? 'bg-blue-500/5' : 'group-hover:bg-white/5'}`} style={{ maxHeight: '30vh' }} />
+                                                                                                                        </div>
+                                                                                                                    ))}
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
+                                                    
+                                                                                            {/* Theme Exploration Section */}
+                                                                                            {iter.theme_variants_paths && iter.theme_variants_paths.length > 0 && (
+                                                                                                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg opacity-80 hover:opacity-100 transition-opacity mt-8">
+                                                                                                    <div className="p-4 bg-slate-800/30 flex items-center gap-2">
+                                                                                                        <h2 className="font-semibold text-slate-400 text-xs uppercase tracking-widest border-b border-slate-700 pb-2 w-full">Theme & Typography Pass</h2>
+                                                                                                    </div>
+                                                                                                    <div className="space-y-8 pt-4 pb-6">
+                                                                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-y border-slate-800">
+                                                                                                            {iter.theme_variants_paths.map((vPath, idx) => (
+                                                                                                                <div
+                                                                                                                    key={vPath}
+                                                                                                                    className={`w-full relative cursor-pointer group border-r border-slate-800 last:border-r-0`}
+                                                                                                                    onClick={() => setSelectedImage(`/viewer/public/${vPath}`)}
+                                                                                                                >
+                                                                                                                    <img src={`/viewer/public/${vPath}`} alt={`Theme ${idx+1}`} className={`w-full h-auto object-contain transition-colors ${iter.chosen_theme_path === vPath ? 'bg-blue-500/5' : 'group-hover:bg-white/5'}`} style={{ maxHeight: '30vh' }} />
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
                                         {/* Target UI Card */}
-                                        {iter.chosen_design_path && (
+                                        {(iter.chosen_design_path || iter.chosen_theme_path) && (
                                             <div className="bg-slate-900 border-2 border-blue-500/40 rounded-xl overflow-hidden shadow-[0_0_30px_rgba(59,130,246,0.15)] relative">
-                                                <div className="absolute top-0 right-0 p-3">
+                                                <div className="absolute top-0 right-0 p-3 z-10">
                                                     <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg shadow-blue-500/50">TARGET UI</span>
                                                 </div>
                                                 <div className="p-4 bg-blue-950/20 flex items-center gap-2">
                                                     <h2 className="font-bold text-blue-400 text-sm uppercase tracking-widest">Final Iteration Goal</h2>
                                                 </div>
                                                 
-                                                <div className="relative cursor-pointer group" onClick={() => setSelectedImage(`/viewer/public/${iter.chosen_design_path}`)}>
-                                                    <img src={`/viewer/public/${iter.chosen_design_path}`} alt="Target Design" className="w-full h-auto object-contain border-y border-blue-900/50" style={{ maxHeight: '70vh' }} />
+                                                <div className="relative cursor-pointer group" onClick={() => setSelectedImage(`/viewer/public/${iter.chosen_theme_path || iter.chosen_design_path}`)}>
+                                                    <img src={`/viewer/public/${iter.chosen_theme_path || iter.chosen_design_path}`} alt="Target Design" className="w-full h-auto object-contain border-y border-blue-900/50" style={{ maxHeight: '70vh' }} />
                                                 </div>
 
                                                 {iter.design_review_critique && (
                                                     <div className="p-6 bg-blue-950/5">
-                                                        <h3 className="text-[10px] font-bold text-blue-500/70 mb-2 uppercase tracking-widest">Overseer Strategy</h3>
+                                                        <h3 className="text-[10px] font-bold text-blue-500/70 mb-2 uppercase tracking-widest">Layout Strategy</h3>
                                                         <p className="text-xs text-blue-100/70 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-blue-500/50 pl-4 py-1">
                                                             {iter.design_review_critique}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {iter.theme_review_critique && (
+                                                    <div className="p-6 bg-blue-950/10 border-t border-blue-900/20">
+                                                        <h3 className="text-[10px] font-bold text-blue-500/70 mb-2 uppercase tracking-widest">Theme Strategy</h3>
+                                                        <p className="text-xs text-blue-100/70 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-blue-500/50 pl-4 py-1">
+                                                            {iter.theme_review_critique}
                                                         </p>
                                                     </div>
                                                 )}
