@@ -75,34 +75,45 @@ class Overseer:
             return screenshot
 
     def evaluate_architecture(self, branch_name: str) -> tuple[int, str]:
-        logger.info("Evaluating architectural best practices...")
+        logger.info("Evaluating full codebase architecture...")
         try:
-            diff_output = self.git._run(["git", "diff", f"main...{branch_name}", "--", "src/", "package.json"], cwd="app")
+            source_code = ""
+            for root, _, files in os.walk("app/src"):
+                for file in files:
+                    if file.endswith(('.tsx', '.ts', '.jsx', '.js', '.css')):
+                        file_path = os.path.join(root, file)
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                rel_path = os.path.relpath(file_path, "app")
+                                source_code += f"\n--- {rel_path} ---\n```\n{f.read()}\n```\n"
+                        except Exception:
+                            pass
             
-            if not diff_output.strip():
-                return 10, "No code changes detected to review."
+            try:
+                with open("app/package.json", "r", encoding="utf-8") as f:
+                    source_code += f"\n--- package.json ---\n```json\n{f.read()}\n```\n"
+            except:
+                pass
                 
             prompt = f"""
 You are an expert Principal Software Engineer acting as the Architectural Reviewer for Project Loom.
 The application is built using React, Vite, and Tailwind CSS.
 App Identity & Core Architecture: {self.state.app_meta}
 
-Please review the following git diff containing the changes made in this iteration.
+Please review the entire current codebase provided below.
 
-Evaluate the changes based on:
+Evaluate the codebase based on:
 1. Technical best practices (React hooks, state management, pure functions).
-2. Modularity and separation of concerns (are components getting too large?).
-3. Maintainability and readability.
+2. Modularity and separation of concerns (are components getting too large? Should they be split?).
+3. Maintainability, readability, and file structure.
 4. Alignment with the App Identity/Architecture defined above.
 5. Any potential performance bottlenecks (unnecessary re-renders, complex layout thrashing).
 
-Provide a concise, highly technical architectural critique (under 250 words). Focus strictly on the code quality, not the visual design.
+Provide a concise, highly technical architectural critique (under 250 words). Focus strictly on the code quality and structure, not the visual design.
 Finally, give the architecture a score from 1 to 10. Output ONLY the integer score on the very last line of your response.
 
-GIT DIFF:
-```diff
-{diff_output[:10000]} # Truncated to avoid token limits if it's massive
-```
+FULL CODEBASE:
+{source_code}
 """
             review_response = self.think(prompt)
             review_text = review_response.strip()
