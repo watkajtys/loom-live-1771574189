@@ -85,13 +85,16 @@ class Overseer:
             prompt = f"""
 You are an expert Principal Software Engineer acting as the Architectural Reviewer for Project Loom.
 The application is built using React, Vite, and Tailwind CSS.
+App Identity & Core Architecture: {self.state.app_meta}
+
 Please review the following git diff containing the changes made in this iteration.
 
 Evaluate the changes based on:
 1. Technical best practices (React hooks, state management, pure functions).
 2. Modularity and separation of concerns (are components getting too large?).
 3. Maintainability and readability.
-4. Any potential performance bottlenecks (unnecessary re-renders, complex layout thrashing).
+4. Alignment with the App Identity/Architecture defined above.
+5. Any potential performance bottlenecks (unnecessary re-renders, complex layout thrashing).
 
 Provide a concise, highly technical architectural critique (under 250 words). Focus strictly on the code quality, not the visual design.
 Finally, give the architecture a score from 1 to 10. Output ONLY the integer score on the very last line of your response.
@@ -133,17 +136,18 @@ GIT DIFF:
                 
                 if hasattr(self, 'model'):
                     prompt = [
-                        f"You are the Overseer. Your goal was: '{self.state.inspiration_goal}'.\n",
+                        f"You are the Overseer. Your goal was to implement: '{self.state.inspiration_goal}'.\n",
+                        f"App Identity (Meta): {self.state.app_meta}\n",
                         f"Target Route: {target_route}\n",
                         "The first image is the actual React app running."
                     ]
                     content = [{"mime_type": "image/png", "data": app_screenshot}]
                     
                     if design_screenshot:
-                        prompt.append("The second image is the intended design.")
+                        prompt.append("The second image is the target design we are trying to achieve.")
                         content.append({"mime_type": "image/png", "data": design_screenshot})
                         
-                    prompt.append("Score how well the app matches the goal (and the design if provided) from 0 to 10. Output ONLY the integer score on the first line, followed by a brief critique on the next lines.")
+                    prompt.append("Score how well the actual app matches the target design and the core App Identity from 0 to 10. Pay special attention to whether the new feature was integrated correctly without destroying existing UI. Output ONLY the integer score on the first line, followed by a brief critique on the next lines.")
                     
                     if console_logs:
                         logs_str = "\n".join(console_logs[:20]) # Limit to 20 lines
