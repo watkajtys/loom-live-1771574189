@@ -222,9 +222,141 @@ FULL CODEBASE:
             f.writelines(new_lines)
         logger.info(f"Updated {env_path} with {key}={value}")
 
+    def ensure_scaffold(self):
+        """Ensures that a basic React + Vite + Tailwind project exists in the app/ directory."""
+        if os.path.exists("app/src"):
+            return
+
+        logger.info("[bold yellow]No React project detected. Scaffolding initial application...[/bold yellow]", extra={"markup": True})
+        
+        # We'll use a pre-defined set of files to ensure a clean, working start for Jules
+        # instead of relying on interactive npm commands.
+        
+        # 1. Package.json
+        package_json = {
+            "name": "app",
+            "private": True,
+            "version": "0.0.0",
+            "type": "module",
+            "scripts": {
+                "dev": "vite",
+                "build": "vite build",
+                "lint": "eslint .",
+                "preview": "vite preview"
+            },
+            "dependencies": {
+                "react": "^19.0.0",
+                "react-dom": "^19.0.0",
+                "react-router-dom": "^7.0.0",
+                "lucide-react": "^0.454.0"
+            },
+            "devDependencies": {
+                "@vitejs/plugin-react": "^4.3.0",
+                "autoprefixer": "^10.4.19",
+                "postcss": "^8.4.38",
+                "tailwindcss": "^3.4.3",
+                "typescript": "^5.2.2",
+                "vite": "^6.0.0"
+            }
+        }
+        
+        os.makedirs("app/src", exist_ok=True)
+        os.makedirs("app/public", exist_ok=True)
+        
+        import json
+        with open("app/package.json", "w") as f:
+            json.dump(package_json, f, indent=2)
+            
+        # 2. Vite Config
+        with open("app/vite.config.ts", "w") as f:
+            f.write("""import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
+""")
+
+        # 3. Tailwind Config
+        with open("app/tailwind.config.js", "w") as f:
+            f.write("""/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+""")
+
+        # 4. PostCSS Config
+        with open("app/postcss.config.js", "w") as f:
+            f.write("""export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+""")
+
+        # 5. Index.html
+        with open("app/index.html", "w") as f:
+            f.write("""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loom App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+""")
+
+        # 6. Basic SRC files
+        with open("app/src/index.css", "w") as f:
+            f.write("@tailwind base;\n@tailwind components;\n@tailwind utilities;\n")
+            
+        with open("app/src/App.tsx", "w") as f:
+            f.write("""export default function App() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+      <h1 className="text-4xl font-bold">Loom Initialized</h1>
+    </div>
+  )
+}
+""")
+
+        with open("app/src/main.tsx", "w") as f:
+            f.write("""import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.tsx'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+""")
+
+        # 7. Git Init & Commit
+        try:
+            self.git._run(["git", "add", "."], cwd="app")
+            self.git.commit("chore: initial scaffold")
+            logger.info("[bold green]Scaffolding complete.[/bold green]", extra={"markup": True})
+        except Exception as e:
+            logger.warning(f"Failed to commit scaffold: {e}")
+
     def loop(self):
         logger.info("[bold green]Starting Loom Loop...[/bold green]", extra={"markup": True})
         self.git.ensure_remote()
+        self.ensure_scaffold()
         
         current_brainstorm_output = None
         # Recover target route from history if resuming
