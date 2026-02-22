@@ -266,6 +266,12 @@ A markdown-formatted summary defining the App Name, Core Value Proposition, Glob
                     with open("app/APP_META.md", "w", encoding="utf-8") as f:
                         f.write(self.state.app_meta)
                     
+                    try:
+                        self.git._run(["git", "add", "APP_META.md"], cwd="app")
+                        self.git.commit("chore: initialize app meta memory")
+                    except Exception as e:
+                        logger.warning(f"Failed to commit APP_META.md: {e}")
+                    
                 logger.info(f"New Goal: {self.state.inspiration_goal}")
                 self.state.save()
 
@@ -587,7 +593,12 @@ Update the App Meta if you are adding new global systems or routes.
                         current_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
 
                     if "[APP_META]" in next_idea:
-                        self.state.app_meta = next_idea.split("[APP_META]")[1].strip()
+                        meta_part = next_idea.split("[APP_META]")[1]
+                        if "[" in meta_part:
+                            self.state.app_meta = meta_part.split("[")[0].strip()
+                        else:
+                            self.state.app_meta = meta_part.strip()
+                        
                         with open("app/APP_META.md", "w", encoding="utf-8") as f:
                             f.write(self.state.app_meta)
                     
