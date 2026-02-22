@@ -24,6 +24,7 @@ class LoopIteration(BaseModel):
     brainstorming_output: Optional[str] = None
     design_screenshot_path: Optional[str] = None
     design_variants_paths: List[str] = []
+    chosen_design_path: Optional[str] = None
     design_review_critique: Optional[str] = None
     attempts: List[AttemptRecord] = []
     happiness_score: int = 0  # Final score of this iteration
@@ -41,6 +42,9 @@ class ConductorState(BaseModel):
     history: List[LoopIteration] = []
     stitch_project_id: Optional[str] = None
     stitch_screen_id: Optional[str] = None
+    active_jules_prompt: Optional[str] = None
+    active_jules_url: Optional[str] = None
+    active_jules_action: Optional[str] = None
     current_status: str = "Idle"
     live_logs: List[str] = []
     

@@ -10,6 +10,8 @@ logger = logging.getLogger("loom")
 class GitClient(AgentProxy):
     def init(self):
         self._run(["git", "init"], cwd="app")
+        self._run(["git", "config", "core.autocrlf", "false"], cwd="app")
+        self._run(["git", "config", "core.safecrlf", "false"], cwd="app")
     
     def checkout_branch(self, branch_name: str):
         self._run(["git", "reset", "--hard"], cwd="app")

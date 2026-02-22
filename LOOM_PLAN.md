@@ -111,3 +111,4 @@ A dedicated "Director's Monitor" webapp will visualize the bot's internal state:
 *   **Git Rollbacks:** If the bot breaks the build beyond repair, it must `git reset --hard` to the last "Happy" commit on `main`.
 *   **Token Budget:** The Conductor will monitor API usage and halt the loop if it exceeds a set dollar amount.
 *   **Halt Detection:** If the "Happiness Score" doesn't improve for 3 consecutive iterations, the Overseer must pivot its strategy (e.g., "Simplify the design" or "Use a different library").
+- [ ] Retain Jules Run Status in Dashboard: Ensure the active Jules coding session remains visible in the iteration history or dashboard even after the patch is generated, rather than disappearing abruptly, to provide a smoother and more continuous visual experience of the process.

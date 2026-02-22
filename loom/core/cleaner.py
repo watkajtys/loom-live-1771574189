@@ -16,7 +16,7 @@ def clean_slate():
         import loom.core.state as state_module
         if hasattr(state_module, '_state_lock'):
             with state_module._state_lock:
-                state_module._global_state = state_module.ConductorState()
+                state_module._global_state = state_module.ConductorState(live_logs=[])
     except Exception:
         pass
 
@@ -29,6 +29,16 @@ def clean_slate():
             subprocess.run(["git", "reset", "--hard"], cwd="app", check=True, stdout=subprocess.DEVNULL)
             subprocess.run(["git", "clean", "-xfd"], cwd="app", check=True, stdout=subprocess.DEVNULL)
             subprocess.run(["git", "checkout", "main"], cwd="app", check=True, stdout=subprocess.DEVNULL)
+            
+            # Delete any left-over iter- branches
+            try:
+                branches = subprocess.check_output(["git", "branch"], cwd="app", text=True)
+                for branch in branches.splitlines():
+                    branch_name = branch.strip().replace("* ", "")
+                    if branch_name.startswith("iter-"):
+                        subprocess.run(["git", "branch", "-D", branch_name], cwd="app", check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                logger.warning(f"Error deleting old branches: {e}")
             
             # If origin exists, hard reset to it. If it fails, that's okay (e.g. no origin yet).
             try:

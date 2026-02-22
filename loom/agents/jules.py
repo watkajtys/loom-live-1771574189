@@ -14,7 +14,7 @@ class JulesClient(AgentProxy):
         if not self.api_key:
             logger.warning("JULES_API_KEY missing. Jules tasks will fail.")
 
-    def run_task(self, prompt: str, repo_owner: str, repo_name: str, branch: str) -> str:
+    def run_task(self, prompt: str, repo_owner: str, repo_name: str, branch: str, activity_callback=None) -> str:
         logger.info(f"Tasking Jules API: {prompt}")
         expected_source = f"sources/github/{repo_owner}/{repo_name}"
         
@@ -59,11 +59,45 @@ class JulesClient(AgentProxy):
             raise Exception(f"Jules Session Failed: {resp.text}")
 
         session_name = resp.json()["name"]
+        session_url = resp.json().get("url", "")
         logger.info(f"Jules Session created: {session_name}")
+        
+        if activity_callback:
+            activity_callback("Initializing...", session_url)
 
         patch_content = None
+        seen_activities = set()
+
         for _ in range(360): # 1 hour timeout
             time.sleep(10)
+            
+            # Poll for activities to log progress
+            try:
+                act_resp = requests.get(f"{self.BASE_URL}/{session_name}/activities", headers={"X-Goog-Api-Key": self.api_key})
+                if act_resp.ok:
+                    activities = act_resp.json().get("activities", [])
+                    for act in reversed(activities): # Process oldest to newest to catch the latest
+                        act_id = act.get("name")
+                        if act_id and act_id not in seen_activities:
+                            seen_activities.add(act_id)
+                            
+                            # Try to extract a meaningful title/description from the activity
+                            title = None
+                            if "progressUpdated" in act:
+                                title = act["progressUpdated"].get("title")
+                            elif "planGenerated" in act:
+                                title = "Generated execution plan."
+                            elif "error" in act:
+                                title = f"Error: {act['error']}"
+                                
+                            if title: 
+                                logger.info(f"Jules Activity: {title}")
+                                if activity_callback:
+                                    activity_callback(title, session_url)
+            except Exception as e:
+                pass # Non-fatal if we can't fetch activities
+
+            # Check main session status
             status_resp = requests.get(f"{self.BASE_URL}/{session_name}", headers={"X-Goog-Api-Key": self.api_key})
             status = status_resp.json()
             state = status.get("state")
@@ -90,12 +124,12 @@ class JulesClient(AgentProxy):
         clean_patch = ''.join(new_parts)
         
         patch_path = "app/jules.patch"
-        with open(patch_path, "w", encoding="utf-8") as f:
+        with open(patch_path, "w", encoding="utf-8", newline='\n') as f:
             f.write(clean_patch)
             
         logger.info("Applying patch...")
         try:
-            self._run(["git", "apply", "--reject", "jules.patch"], cwd="app")
+            self._run(["git", "apply", "--ignore-space-change", "--ignore-whitespace", "--reject", "jules.patch"], cwd="app")
         except Exception as e:
             logger.warning(f"git apply --reject had warnings/errors, but proceeding: {e}")
             
