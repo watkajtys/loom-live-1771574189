@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loom Observer Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            width: 24px; height: 24px; border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [state, setState] = useState(null);
+            const [error, setError] = useState(null);
+            const [selectedImage, setSelectedImage] = useState(null);
+            const [visiblePatches, setVisiblePatches] = useState({});
+            const [patchContents, setPatchContents] = useState({});
+            
+            const logContainerRef = useRef(null);
+            const mainContainerRef = useRef(null);
+            const scrollAnchorRef = useRef(null);
+            const isScrolledUpLogs = useRef(false);
+            const isScrolledUpMain = useRef(false);
+
+            const fetchState = async () => {
+                try {
+                    const res = await fetch(`/session_state.json?t=${new Date().getTime()}`);
+                    if (!res.ok) throw new Error("State file not found");
+                    const text = await res.text();
+                    if (!text || text.trim() === "") return; // Skip empty reads during file write
+                    const data = JSON.parse(text);
+                    if (data && data.history) {
+                        setState(data);
+                        setError(null);
+                    }
+                } catch (e) {
+                    console.warn("Fetch state error:", e.message);
+                }
+            };
+
+            useEffect(() => {
+                fetchState();
+                const interval = setInterval(fetchState, 2000);
+                return () => clearInterval(interval);
+            }, []);
+
+            // Smart Auto-scroll logic for terminal
+            useEffect(() => {
+                const el = logContainerRef.current;
+                if (!el) return;
+                if (!isScrolledUpLogs.current) el.scrollTop = el.scrollHeight;
+            }, [state?.live_logs]);
+
+            // Smart Auto-scroll logic for main content
+            useEffect(() => {
+                const el = mainContainerRef.current;
+                if (!el) return;
+                // Only auto-scroll if we are not explicitly scrolled up
+                if (!isScrolledUpMain.current) {
+                    // Use instant scrollTop instead of smooth scrollIntoView to prevent animation jank and mouse flicker during rapid API updates
+                    el.scrollTop = el.scrollHeight;
+                }
+            }, [state]);
+
+            const handleLogScroll = (e) => {
+                const el = e.target;
+                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+                isScrolledUpLogs.current = !isNearBottom;
+            };
+
+            const handleMainScroll = (e) => {
+                const el = e.target;
+                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+                isScrolledUpMain.current = !isNearBottom;
+            };
+
+            const togglePatch = async (patchPath) => {
+                if (visiblePatches[patchPath]) {
+                    setVisiblePatches(prev => ({ ...prev, [patchPath]: false }));
+                    return;
+                }
+                
+                setVisiblePatches(prev => ({ ...prev, [patchPath]: true }));
+                
+                if (!patchContents[patchPath]) {
+                    try {
+                        const res = await fetch(`/viewer/public/${patchPath}`);
+                        const text = await res.text();
+                        setPatchContents(prev => ({ ...prev, [patchPath]: text }));
+                    } catch (e) {
+                        setPatchContents(prev => ({ ...prev, [patchPath]: "Failed to load patch file." }));
+                    }
+                }
+            };
+
+            if (!state) return <div className="p-8 text-center text-slate-400">Waiting for Loom Factory to start...</div>;
+
+            const history = state.history || [];
+            const currentIter = history[history.length - 1];
+
+            return (
+                <div className="h-screen flex flex-col bg-[#0f172a] text-slate-200 overflow-hidden">
+                    {/* Fullscreen Image Modal */}
+                    {selectedImage && (
+                        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 md:p-12" onClick={() => setSelectedImage(null)}>
+                            <img src={selectedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+                            <button className="absolute top-6 right-6 bg-slate-800 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-slate-700 transition-colors border border-slate-600 text-xl font-bold">
+                                X
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Header */}
+                    <header className="bg-slate-900 border-b border-slate-800 p-4 md:p-6 shadow-md z-10 shrink-0">
+                        <div className="w-[95%] max-w-[1800px] mx-auto flex items-center justify-between">
+                            <div>
+                                <h1 className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                                    Project Loom
+                                </h1>
+                                <p className="text-slate-400 text-xs md:text-sm mt-1">{state.project_name} - Iteration {state.current_iteration}</p>
+                            </div>
+                            <div className="flex items-center gap-3 bg-slate-800 px-4 py-2 rounded-full border border-slate-700">
+                                <div className="spinner"></div>
+                                <span className="text-xs md:text-sm font-medium text-blue-300">{state.current_status}</span>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <div className="flex-1 overflow-y-auto w-full" onScroll={handleMainScroll} ref={mainContainerRef}>
+                        <main className="w-[95%] max-w-[1800px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-8 pb-12">
+                            {/* Timeline Sidebar */}
+                            <div className="lg:col-span-1 space-y-6 md:sticky md:top-6 max-h-[calc(100vh-350px)] overflow-y-auto pr-2">
+                                <h2 className="text-lg font-semibold text-slate-200 tracking-wider uppercase text-sm mb-4">Iteration History</h2>
+                                {[...history].reverse().map((iter) => (
+                                    <div key={iter.id} className={`p-5 rounded-xl border transition-all ${iter.id === state.current_iteration ? 'bg-slate-800 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.1)]' : 'bg-slate-800/40 border-slate-700 hover:border-slate-600'}`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h3 className="font-bold text-white">Iteration {iter.id}</h3>
+                                            {iter.attempts && iter.attempts.length > 0 && (
+                                                <span className={`px-2 py-1 text-xs rounded font-bold ${iter.happiness_score >= 8 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                                    Score: {iter.happiness_score}/10
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-sm text-slate-300 mb-4 line-clamp-3 hover:line-clamp-none transition-all cursor-pointer" title={iter.goal}>{iter.goal}</p>
+                                        
+                                        {/* Attempts Timeline */}
+                                        <div className="space-y-3 pl-2 border-l-2 border-slate-700">
+                                            {iter.attempts && iter.attempts.map(att => (
+                                                <div key={att.attempt_number} className="relative pl-4">
+                                                    <div className="absolute w-2 h-2 bg-slate-500 rounded-full -left-[5px] top-1.5 ring-4 ring-slate-800"></div>
+                                                    <div className="text-xs font-semibold text-slate-400 mb-1 flex justify-between">
+                                                        <span>Attempt {att.attempt_number}</span>
+                                                        <span>Score: {att.score}</span>
+                                                    </div>
+                                                    <div className="text-xs text-slate-500 line-clamp-2 hover:line-clamp-none transition-all cursor-pointer" title={att.critique}>{att.critique}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Artifact Viewer Stage */}
+                            <div className="lg:col-span-3 space-y-16">
+                                {history.map((iter) => (
+                                    <div key={`stage-iter-${iter.id}`} className="space-y-8 relative">
+                                        {/* Iteration Anchors for scrolling */}
+                                        <div id={`iter-${iter.id}`} className="absolute -top-32"></div>
+                                        
+                                        {/* Main Goal Card */}
+                                        <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg relative">
+                                            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-500"></div>
+                                            <div className="p-4 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center pl-6">
+                                                <h2 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
+                                                    Iteration {iter.id} Goal
+                                                </h2>
+                                                {iter.id === state.current_iteration && <span className="text-xs text-blue-400 font-bold px-2 py-1 bg-blue-500/20 rounded animate-pulse">CURRENT</span>}
+                                            </div>
+                                            <div className="p-6 md:p-8 pl-8">
+                                                <p className="text-lg md:text-xl text-blue-50 font-medium leading-relaxed whitespace-pre-wrap">
+                                                    {iter.goal}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Brainstorming Section */}
+                                        {iter.brainstorming_output && (
+                                            <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg">
+                                                <div className="p-3 bg-slate-800/50 border-b border-slate-700/50">
+                                                    <h2 className="font-semibold text-slate-400 text-xs uppercase tracking-wider pl-2">Brainstorming & Reasoning</h2>
+                                                </div>
+                                                <div className="p-5 overflow-x-auto">
+                                                    <p className="text-xs md:text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
+                                                        {iter.brainstorming_output}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Stitch Design Artifacts */}
+                                        {(iter.design_screenshot_path || (iter.design_variants_paths && iter.design_variants_paths.length > 0)) && (
+                                            <div className="bg-slate-900 border border-fuchsia-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(217,70,239,0.1)]">
+                                                <div className="p-4 bg-fuchsia-950/20 border-b border-fuchsia-500/20 flex items-center gap-2">
+                                                    <h2 className="font-semibold text-fuchsia-400 text-sm uppercase tracking-wider">Stitch Design Generation</h2>
+                                                </div>
+                                                
+                                                <div className="p-4 md:p-6 space-y-6">
+                                                    {iter.design_screenshot_path && (
+                                                        <div className="space-y-3">
+                                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Base Design</span>
+                                                            <div 
+                                                                className={`w-full bg-[#0a0a0a] relative flex items-center justify-center p-2 rounded-lg border cursor-pointer hover:border-fuchsia-500/50 transition-colors min-h-[200px] ${state.chosen_design_path === iter.design_screenshot_path ? 'border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.2)]' : 'border-slate-800'}`}
+                                                                onClick={() => setSelectedImage(`/viewer/public/${iter.design_screenshot_path}`)}
+                                                            >
+                                                                <img src={`/viewer/public/${iter.design_screenshot_path}`} alt="Base Design" className="max-w-full h-auto object-contain rounded" style={{ maxHeight: '60vh' }} />
+                                                                {state.chosen_design_path === iter.design_screenshot_path && <span className="absolute top-3 left-3 bg-fuchsia-500 text-black text-xs px-2 py-1 rounded font-bold shadow-lg">CHOSEN DESIGN</span>}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {iter.design_variants_paths && iter.design_variants_paths.length > 0 && (
+                                                        <div className="space-y-3 pt-6 border-t border-slate-800">
+                                                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Exploration Variants</span>
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                {iter.design_variants_paths.map((vPath, idx) => (
+                                                                    <div 
+                                                                        key={vPath} 
+                                                                        className={`w-full bg-[#0a0a0a] relative flex items-center justify-center p-2 rounded-lg border cursor-pointer hover:border-fuchsia-500/50 transition-colors min-h-[150px] ${state.chosen_design_path === vPath ? 'border-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.2)]' : 'border-slate-800'}`}
+                                                                        onClick={() => setSelectedImage(`/viewer/public/${vPath}`)}
+                                                                    >
+                                                                        <img src={`/viewer/public/${vPath}`} alt={`Variant ${idx+1}`} className="max-w-full h-auto object-contain rounded" style={{ maxHeight: '40vh' }} />
+                                                                        <span className="absolute top-3 left-3 bg-black/80 text-fuchsia-400 text-[10px] px-2 py-1 rounded font-bold backdrop-blur">Var {idx+1}</span>
+                                                                        {state.chosen_design_path === vPath && <span className="absolute top-3 right-3 bg-fuchsia-500 text-black text-[10px] px-2 py-1 rounded font-bold shadow-lg">CHOSEN</span>}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {iter.design_review_critique && (
+                                                    <div className="p-5 bg-fuchsia-950/10 border-t border-fuchsia-900/30">
+                                                        <h3 className="text-xs font-bold text-fuchsia-400 mb-2 uppercase tracking-wider">Vision Variant Selection</h3>
+                                                        <p className="text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
+                                                            {iter.design_review_critique}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Jules Implementation Attempts */}
+                                        {iter.attempts && iter.attempts.length > 0 && iter.attempts.map((att, idx) => {
+                                            let styles = {
+                                                card: "bg-slate-900 border border-blue-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+                                                header: "p-4 bg-blue-950/20 border-b border-blue-500/20 flex justify-between items-center",
+                                                title: "font-semibold text-blue-400 text-sm uppercase tracking-wider",
+                                                badge: "px-2 py-1 rounded text-xs font-bold bg-blue-500/20 text-blue-400",
+                                                imgBorderHover: "hover:border-blue-500/50"
+                                            };
+                                            if (att.score >= 8) {
+                                                styles = {
+                                                    card: "bg-slate-900 border border-emerald-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(16,185,129,0.1)]",
+                                                    header: "p-4 bg-emerald-950/20 border-b border-emerald-500/20 flex justify-between items-center",
+                                                    title: "font-semibold text-emerald-400 text-sm uppercase tracking-wider",
+                                                    badge: "px-2 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400",
+                                                    imgBorderHover: "hover:border-emerald-500/50"
+                                                };
+                                            } else if (att.score > 0) {
+                                                styles = {
+                                                    card: "bg-slate-900 border border-amber-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(245,158,11,0.1)]",
+                                                    header: "p-4 bg-amber-950/20 border-b border-amber-500/20 flex justify-between items-center",
+                                                    title: "font-semibold text-amber-400 text-sm uppercase tracking-wider",
+                                                    badge: "px-2 py-1 rounded text-xs font-bold bg-amber-500/20 text-amber-400",
+                                                    imgBorderHover: "hover:border-amber-500/50"
+                                                };
+                                            } else {
+                                                styles = {
+                                                    card: "bg-slate-900 border border-red-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(239,68,68,0.1)]",
+                                                    header: "p-4 bg-red-950/20 border-b border-red-500/20 flex justify-between items-center",
+                                                    title: "font-semibold text-red-400 text-sm uppercase tracking-wider",
+                                                    badge: "px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-400",
+                                                    imgBorderHover: "hover:border-red-500/50"
+                                                };
+                                            }
+
+                                            return (
+                                                <div key={idx} className={styles.card}>
+                                                    <div className={styles.header}>
+                                                        <h2 className={styles.title}>Jules Attempt {att.attempt_number}</h2>
+                                                        <span className={styles.badge}>
+                                                            Score: {att.score}/10
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <div className="p-4 md:p-6 space-y-6">
+                                                        {/* App Screenshot */}
+                                                        <div>
+                                                            <div 
+                                                                className={`w-full bg-[#0a0a0a] relative flex items-center justify-center p-2 rounded-lg border border-slate-800 cursor-pointer ${styles.imgBorderHover} transition-colors min-h-[200px]`}
+                                                                onClick={() => setSelectedImage(att.app_screenshot_path ? `/viewer/public/${att.app_screenshot_path}` : null)}
+                                                            >
+                                                                {att.app_screenshot_path ? (
+                                                                    <img src={`/viewer/public/${att.app_screenshot_path}`} alt={`App Build Attempt ${att.attempt_number}`} className="max-w-full h-auto object-contain rounded" style={{ maxHeight: '60vh' }} />
+                                                                ) : (
+                                                                    <span className="text-slate-600 text-sm">Failed to capture screenshot</span>
+                                                                )}
+                                                                <span className="absolute top-3 left-3 bg-black/80 text-slate-300 text-[10px] px-2 py-1 rounded font-bold backdrop-blur uppercase tracking-wider border border-slate-700/50">Live Build</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Jules Code Diff Button */}
+                                                        {att.jules_patch_path && (
+                                                            <div>
+                                                                <button 
+                                                                    onClick={() => togglePatch(att.jules_patch_path)}
+                                                                    className="w-full p-3 flex justify-between items-center bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-slate-700 transition-colors text-left"
+                                                                >
+                                                                    <span className="text-xs font-bold text-slate-400 tracking-wider">VIEW CODE DIFF</span>
+                                                                    <span className="text-slate-500 text-xs">{visiblePatches[att.jules_patch_path] ? '[Hide]' : '[Expand]'}</span>
+                                                                </button>
+                                                                
+                                                                {visiblePatches[att.jules_patch_path] && (
+                                                                    <div className="mt-2 p-4 rounded-lg border border-slate-700 bg-[#0d1117] overflow-x-auto">
+                                                                        {patchContents[att.jules_patch_path] ? (
+                                                                            <pre className="text-[11px] font-mono leading-relaxed">
+                                                                                {patchContents[att.jules_patch_path].split('\n').map((line, i) => {
+                                                                                    let color = "text-slate-300";
+                                                                                    if (line.startsWith('+')) color = "text-emerald-400 bg-emerald-400/10 inline-block w-full";
+                                                                                    if (line.startsWith('-')) color = "text-red-400 bg-red-400/10 inline-block w-full";
+                                                                                    if (line.startsWith('@@')) color = "text-blue-400";
+                                                                                    return <div key={i} className={color}>{line || ' '}</div>;
+                                                                                })}
+                                                                            </pre>
+                                                                        ) : (
+                                                                            <div className="text-slate-500 text-xs animate-pulse">Loading patch contents...</div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Overseer Feedback */}
+                                                        {(() => {
+                                                            let title = "Vision Verification";
+                                                            let fbStyleClasses = {
+                                                                wrapper: "bg-emerald-950/10 border-emerald-900/30",
+                                                                title: "text-emerald-400"
+                                                            };
+
+                                                            if (att.critique && att.critique.includes("architecture needs work")) {
+                                                                title = "Architectural Rejection";
+                                                                fbStyleClasses = {
+                                                                    wrapper: "bg-orange-950/10 border-orange-900/30",
+                                                                    title: "text-orange-400"
+                                                                };
+                                                            } else if (att.critique && att.critique.includes("failed to compile")) {
+                                                                title = "Build Failure";
+                                                                fbStyleClasses = {
+                                                                    wrapper: "bg-red-950/10 border-red-900/30",
+                                                                    title: "text-red-400"
+                                                                };
+                                                            } else if (att.score < 8) {
+                                                                fbStyleClasses = {
+                                                                    wrapper: "bg-amber-950/10 border-amber-900/30",
+                                                                    title: "text-amber-400"
+                                                                };
+                                                            }
+                                                            
+                                                            return (
+                                                                <div className={`p-4 rounded-lg border ${fbStyleClasses.wrapper}`}>
+                                                                    <h3 className={`text-xs font-bold mb-2 uppercase tracking-wider ${fbStyleClasses.title}`}>{title}</h3>
+                                                                    <p className="text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
+                                                                        {att.critique}
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Live Jules Active Session */}
+                                        {iter.id === state.current_iteration && state.active_jules_prompt && (
+                                            <div className="bg-slate-900 border border-blue-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.1)] mt-8">
+                                                <div className="p-4 bg-blue-950/20 border-b border-blue-500/20 flex justify-between items-center">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="spinner border-blue-400 border-l-transparent w-4 h-4 border-2"></div>
+                                                        <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                                                            Jules is Coding...
+                                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6]"></span>
+                                                        </h3>
+                                                    </div>
+                                                    {state.active_jules_url && (
+                                                        <a href={state.active_jules_url} target="_blank" rel="noopener noreferrer" className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded hover:bg-blue-500/40 transition-colors">
+                                                            View in Console [↗]
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <div className="p-5 space-y-4">
+                                                    <div>
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Current Action</span>
+                                                        <div className="text-sm font-medium text-slate-200">
+                                                            {state.active_jules_action || "Initializing session..."}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Task Prompt</span>
+                                                        <div className="text-xs text-slate-400 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto bg-[#0a0a0a] p-3 rounded border border-slate-800">
+                                                            {state.active_jules_prompt}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Architectural Review */}
+                                        {iter.architectural_critique && (
+                                            <div className="bg-slate-900 border border-orange-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(249,115,22,0.1)]">
+                                                <div className="p-4 bg-orange-950/20 border-b border-orange-500/20 flex items-center gap-2">
+                                                    <h2 className="font-semibold text-orange-400 text-sm uppercase tracking-wider">Architectural Review</h2>
+                                                </div>
+                                                <div className="p-5 overflow-x-auto">
+                                                    <p className="text-xs md:text-sm text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
+                                                        {iter.architectural_critique}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Divider between iterations */}
+                                        {iter.id !== history[history.length - 1].id && (
+                                            <div className="w-full flex justify-center my-16">
+                                                <div className="h-16 w-px bg-gradient-to-b from-slate-700 to-transparent"></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                <div ref={scrollAnchorRef} className="h-4"></div>
+                            </div>
+                        </main>
+                    </div>
+
+                    {/* Live Terminal Logger */}
+                    <div className="h-64 shrink-0 bg-[#0a0a0a] border-t border-slate-800 p-4 font-mono text-[11px] overflow-y-auto z-50 shadow-[0_-20px_40px_rgba(0,0,0,0.6)]" onScroll={handleLogScroll} ref={logContainerRef}>
+                        <div className="sticky top-0 right-0 flex justify-end pb-2 pointer-events-none">
+                             <div className="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-500 font-bold tracking-widest uppercase pointer-events-auto">Live Terminal Logs</div>
+                        </div>
+                        <div className="space-y-1.5 pb-4">
+                            {state.live_logs && state.live_logs.map((log, i) => {
+                                let color = "text-slate-400";
+                                let bg = "hover:bg-white/5";
+                                
+                                // Status Colors
+                                if (log.includes("ERROR") || log.includes("Failed")) color = "text-red-400 font-semibold";
+                                else if (log.includes("WARNING") || log.includes("Unhappy")) color = "text-amber-400 font-medium";
+                                else if (log.includes("INFO") && (log.includes("Score:") || log.includes("achieved") || log.includes("COMPLETE"))) color = "text-emerald-400 font-semibold";
+                                
+                                // Agent Colors
+                                else if (log.includes("Jules")) color = "text-blue-400";
+                                else if (log.includes("Stitch") || log.includes("design")) color = "text-fuchsia-400";
+                                else if (log.includes("Vision") || log.includes("Evaluating") || log.includes("Critique")) color = "text-purple-400";
+                                else if (log.includes("architectural") || log.includes("Architecture") || log.includes("Architectural")) color = "text-orange-400 font-bold";
+                                
+                                // System Colors
+                                else if (log.includes("git ")) color = "text-orange-300";
+                                else if (log.includes("Phoenix") || log.includes("Vite") || log.includes("http://localhost")) color = "text-yellow-300";
+                                else if (log.includes("Brainstorming") || log.includes("New Goal:") || log.includes("Next Idea:")) color = "text-cyan-400 font-bold";
+                                else if (log.includes("Loom Loop")) color = "text-emerald-500 font-bold tracking-wider";
+                                
+                                return <div key={i} className={`${color} ${bg} px-2 py-0.5 rounded transition-colors break-words`}>{log}</div>;
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
