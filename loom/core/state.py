@@ -21,6 +21,7 @@ class LoopIteration(BaseModel):
     id: int
     timestamp: str
     goal: str
+    target_route: str = "/"
     brainstorming_output: Optional[str] = None
     design_screenshot_path: Optional[str] = None
     design_variants_paths: List[str] = []
@@ -36,6 +37,7 @@ _state_lock = threading.RLock()
 
 class ConductorState(BaseModel):
     project_name: str = "Loom Experiment"
+    app_meta: str = ""
     current_iteration: int = 0
     active_branch: str = "main"
     inspiration_goal: str = ""

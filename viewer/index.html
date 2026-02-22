@@ -216,8 +216,13 @@
                                             <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-500"></div>
                                             <div className="p-6 md:p-8 pl-8 flex justify-between items-start">
                                                 <div>
-                                                    <h2 className="font-bold text-slate-500 text-xs uppercase tracking-wider flex items-center gap-2 mb-3">
+                                                    <h2 className="font-bold text-slate-500 text-xs uppercase tracking-wider flex items-center gap-3 mb-3">
                                                         Iteration {iter.id} Goal
+                                                        {iter.target_route && (
+                                                            <span className="text-[10px] font-mono text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-0.5 rounded tracking-normal normal-case">
+                                                                {iter.target_route}
+                                                            </span>
+                                                        )}
                                                         {iter.id === state.current_iteration && <span className="text-[10px] text-blue-400 font-bold px-1.5 py-0.5 bg-blue-500/20 rounded animate-pulse">CURRENT</span>}
                                                     </h2>
                                                     <p className="text-lg md:text-xl text-blue-50 font-medium leading-relaxed whitespace-pre-wrap">
