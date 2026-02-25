@@ -23,9 +23,15 @@ class LoopIteration(BaseModel):
     goal: str
     target_route: str = "/"
     requires_design: bool = True
+    test_scenario: Optional[str] = None
+    negative_history: List[str] = []
     brainstorming_output: Optional[str] = None
+    base_briefs: List[str] = []
+    base_seed_paths: List[str] = []
+    seed_review_critique: Optional[str] = None
     design_screenshot_path: Optional[str] = None
     design_variants_paths: List[str] = []
+    layout_review_critique: Optional[str] = None
     chosen_design_path: Optional[str] = None
     design_review_critique: Optional[str] = None
     theme_variants_paths: List[str] = []
@@ -53,6 +59,7 @@ class ConductorState(BaseModel):
     active_jules_url: Optional[str] = None
     active_jules_action: Optional[str] = None
     current_status: str = "Idle"
+    current_phase: str = "Inspiration"
     live_logs: List[str] = []
     
     def save(self):

@@ -31,14 +31,12 @@
 
         function App() {
             const [state, setState] = useState(null);
-            const [error, setError] = useState(null);
             const [selectedImage, setSelectedImage] = useState(null);
             const [visiblePatches, setVisiblePatches] = useState({});
             const [patchContents, setPatchContents] = useState({});
             
             const logContainerRef = useRef(null);
             const mainContainerRef = useRef(null);
-            const scrollAnchorRef = useRef(null);
             const isScrolledUpLogs = useRef(false);
             const isScrolledUpMain = useRef(false);
 
@@ -47,11 +45,10 @@
                     const res = await fetch(`/session_state.json?t=${new Date().getTime()}`);
                     if (!res.ok) throw new Error("State file not found");
                     const text = await res.text();
-                    if (!text || text.trim() === "") return; // Skip empty reads during file write
+                    if (!text || text.trim() === "") return; 
                     const data = JSON.parse(text);
                     if (data && data.history) {
                         setState(data);
-                        setError(null);
                     }
                 } catch (e) {
                     console.warn("Fetch state error:", e.message);
@@ -64,44 +61,24 @@
                 return () => clearInterval(interval);
             }, []);
 
-            // Smart Auto-scroll logic for terminal
             useEffect(() => {
-                const el = logContainerRef.current;
-                if (!el) return;
-                if (!isScrolledUpLogs.current) el.scrollTop = el.scrollHeight;
+                if (!isScrolledUpLogs.current && logContainerRef.current) {
+                    logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+                }
             }, [state?.live_logs]);
 
-            // Smart Auto-scroll logic for main content
             useEffect(() => {
-                const el = mainContainerRef.current;
-                if (!el) return;
-                // Only auto-scroll if we are not explicitly scrolled up
-                if (!isScrolledUpMain.current) {
-                    // Use instant scrollTop instead of smooth scrollIntoView to prevent animation jank and mouse flicker during rapid API updates
-                    el.scrollTop = el.scrollHeight;
+                if (!isScrolledUpMain.current && mainContainerRef.current) {
+                    mainContainerRef.current.scrollTop = mainContainerRef.current.scrollHeight;
                 }
             }, [state]);
-
-            const handleLogScroll = (e) => {
-                const el = e.target;
-                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-                isScrolledUpLogs.current = !isNearBottom;
-            };
-
-            const handleMainScroll = (e) => {
-                const el = e.target;
-                const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-                isScrolledUpMain.current = !isNearBottom;
-            };
 
             const togglePatch = async (patchPath) => {
                 if (visiblePatches[patchPath]) {
                     setVisiblePatches(prev => ({ ...prev, [patchPath]: false }));
                     return;
                 }
-                
                 setVisiblePatches(prev => ({ ...prev, [patchPath]: true }));
-                
                 if (!patchContents[patchPath]) {
                     try {
                         const res = await fetch(`/viewer/public/${patchPath}`);
@@ -115,455 +92,236 @@
 
             if (!state) return <div className="p-8 text-center text-slate-400">Waiting for Loom Factory to start...</div>;
 
-            const history = state.history || [];
-            const currentIter = history[history.length - 1];
-
             return (
                 <div className="h-screen flex flex-col bg-[#0f172a] text-slate-200 overflow-hidden">
-                    {/* Fullscreen Image Modal */}
                     {selectedImage && (
-                        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 md:p-12" onClick={() => setSelectedImage(null)}>
+                        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}>
                             <img src={selectedImage} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
-                            <button className="absolute top-6 right-6 bg-slate-800 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-slate-700 transition-colors border border-slate-600 text-xl font-bold">
-                                X
-                            </button>
+                            <button className="absolute top-6 right-6 bg-slate-800 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-slate-700 border border-slate-600 text-xl font-bold">X</button>
                         </div>
                     )}
 
-                    {/* Header */}
-                    <header className="bg-slate-900 border-b border-slate-800 p-4 md:p-6 shadow-md z-10 shrink-0">
-                        <div className="w-[95%] max-w-[1800px] mx-auto flex items-center justify-between">
-                            <div>
-                                <h1 className="text-xl md:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
-                                    Project Loom
-                                </h1>
-                                <p className="text-slate-400 text-xs md:text-sm mt-1">{state.project_name} - Iteration {state.current_iteration}</p>
-                            </div>
-                            <div className="flex items-center gap-3 bg-slate-800 px-4 py-2 rounded-full border border-slate-700">
-                                <div className="spinner"></div>
-                                <span className="text-xs md:text-sm font-medium text-blue-300">{state.current_status}</span>
-                            </div>
+                    <header className="bg-slate-900 border-b border-slate-800 p-4 shadow-md z-10 shrink-0 flex items-center justify-between">
+                        <div>
+                            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">Project Loom</h1>
+                            <p className="text-slate-400 text-xs mt-1">{state.project_name} - Iteration {state.current_iteration}</p>
+                        </div>
+                        <div className="flex items-center gap-3 bg-slate-800 px-4 py-2 rounded-full border border-slate-700">
+                            <div className="spinner"></div>
+                            <span className="text-xs font-medium text-blue-300">{state.current_status}</span>
                         </div>
                     </header>
 
-                    {/* Main Content */}
-                    <div className="flex-1 overflow-y-auto w-full" onScroll={handleMainScroll} ref={mainContainerRef}>
+                    <div className="flex-1 overflow-y-auto w-full" onScroll={(e) => { isScrolledUpMain.current = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight > 100; }} ref={mainContainerRef}>
                         <main className="w-[95%] max-w-[1800px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-8 pb-12">
-                            {/* Timeline Sidebar */}
                             <div className="lg:col-span-1 space-y-6 md:sticky md:top-6 max-h-[calc(100vh-350px)] overflow-y-auto pr-2">
-                                <h2 className="text-lg font-semibold text-slate-200 tracking-wider uppercase text-sm mb-4">Iteration History</h2>
+                                <h2 className="text-lg font-semibold tracking-wider uppercase text-sm mb-4">Build Timeline</h2>
                                 <div className="space-y-6">
-                                    {[...history].reverse().map((iter) => (
-                                        <div key={iter.id} className={`pl-4 border-l-2 transition-colors ${iter.id === state.current_iteration ? 'border-blue-500' : 'border-slate-800 hover:border-slate-600'}`}>
+                                    {[...state.history].reverse().map((iter) => (
+                                        <div key={iter.id} className={`pl-4 border-l-2 ${iter.id === state.current_iteration ? 'border-blue-500' : 'border-slate-800'}`}>
                                             <div className="flex justify-between items-start mb-1">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        const el = document.getElementById(`iter-${iter.id}`);
-                                                        if (el) el.scrollIntoView({ behavior: 'smooth' });
-                                                    }}
-                                                    className={`font-bold text-sm transition-colors hover:underline text-left ${iter.id === state.current_iteration ? 'text-blue-400' : 'text-slate-300'}`}
-                                                >
-                                                    Iteration {iter.id}
+                                                <button onClick={() => document.getElementById(`iter-${iter.id}`)?.scrollIntoView({ behavior: 'smooth' })} className={`font-bold text-sm hover:underline text-left ${iter.id === state.current_iteration ? 'text-blue-400' : 'text-slate-300'}`}>
+                                                    {iter.id === 1 ? 'Genesis' : `Refinement ${iter.id - 1}`}
                                                 </button>
-                                                {iter.attempts && iter.attempts.length > 0 && (
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${iter.happiness_score >= 8 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                        {iter.happiness_score}/10
-                                                    </span>
-                                                )}
+                                                {iter.happiness_score > 0 && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${iter.happiness_score >= 8 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{iter.happiness_score}/10</span>}
                                             </div>
-                                            <p className="text-xs text-slate-400 mb-3 line-clamp-2" title={iter.goal}>{iter.goal}</p>
-                                            
-                                            {/* Attempts Timeline */}
-                                            {iter.attempts && iter.attempts.length > 0 && (
-                                                <div className="space-y-2 mt-2">
-                                                    {iter.attempts.map(att => (
-                                                        <div 
-                                                            key={att.attempt_number} 
-                                                            className="text-[11px] flex items-start gap-2 cursor-pointer group"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                const el = document.getElementById(`iter-${iter.id}-att-${att.attempt_number}`);
-                                                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                                            }}
-                                                        >
-                                                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${att.score >= 8 ? 'bg-emerald-500' : att.score > 0 ? 'bg-amber-500' : 'bg-red-500'}`}></span>
-                                                            <div className="min-w-0 flex-1">
-                                                                <div className="flex justify-between">
-                                                                    <span className="font-semibold text-slate-400 group-hover:text-blue-400 transition-colors">Attempt {att.attempt_number}</span>
-                                                                    <span className="text-slate-500">{att.score}/10</span>
-                                                                </div>
-                                                                <div className="text-slate-500 truncate mt-0.5 group-hover:text-slate-300 transition-colors" title={att.critique}>{att.critique}</div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                            <p className="text-xs text-slate-400 line-clamp-2">{iter.goal}</p>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Artifact Viewer Stage */}
                             <div className="lg:col-span-3 space-y-16">
-                                {history.map((iter) => (
-                                    <div key={`stage-iter-${iter.id}`} className="space-y-8 relative">
-                                        {/* Iteration Anchors for scrolling */}
-                                        <div id={`iter-${iter.id}`} className="absolute -top-32"></div>
-                                        
-                                        {/* Main Goal Card */}
-                                        <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg relative">
-                                            <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-500 to-purple-500"></div>
-                                            <div className="p-6 md:p-8 pl-8 flex justify-between items-start">
+                                {state.history.map((iter) => (
+                                    <div key={iter.id} id={`iter-${iter.id}`} className="space-y-8 relative">
+                                        <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg p-6 md:p-8 space-y-6">
+                                            <div className="flex justify-between items-start">
                                                 <div>
-                                                    <h2 className="font-bold text-slate-500 text-xs uppercase tracking-wider flex items-center gap-3 mb-3">
-                                                        Iteration {iter.id} Goal
-                                                        {iter.target_route && (
-                                                            <span className="text-[10px] font-mono text-fuchsia-400 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-0.5 rounded tracking-normal normal-case">
-                                                                {iter.target_route}
-                                                            </span>
-                                                        )}
-                                                        {iter.id === state.current_iteration && <span className="text-[10px] text-blue-400 font-bold px-1.5 py-0.5 bg-blue-500/20 rounded animate-pulse">CURRENT</span>}
-                                                    </h2>
-                                                    <p className="text-lg md:text-xl text-blue-50 font-medium leading-relaxed whitespace-pre-wrap">
-                                                        {iter.goal}
-                                                    </p>
+                                                    <h2 className="font-bold text-slate-500 text-[10px] uppercase tracking-widest mb-2">Iteration {iter.id} Goal {iter.target_route && <span className="ml-2 font-mono text-fuchsia-400 bg-fuchsia-500/10 px-2 py-0.5 rounded tracking-normal normal-case">{iter.target_route}</span>}</h2>
+                                                    <p className="text-lg md:text-xl text-blue-50 font-medium leading-relaxed whitespace-pre-wrap">{iter.goal}</p>
                                                 </div>
-                                                {iter.timestamp && <span className="text-xs text-slate-500 font-mono mt-1">{new Date(iter.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
+                                                {iter.timestamp && <span className="text-xs text-slate-500 font-mono">{new Date(iter.timestamp).toLocaleTimeString()}</span>}
                                             </div>
+                                            {iter.test_scenario && (
+                                                <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
+                                                    <h3 className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-2 flex items-center gap-2"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>Verification Scenario</h3>
+                                                    <p className="text-xs text-slate-300 font-mono leading-relaxed">{iter.test_scenario}</p>
+                                                </div>
+                                            )}
+                                            {iter.negative_history?.length > 0 && (
+                                                <div className="pt-2">
+                                                    <h3 className="text-[10px] font-bold text-red-400/50 uppercase tracking-widest mb-2">Negative Memory</h3>
+                                                    <div className="flex flex-wrap gap-2">{iter.negative_history.map((h, i) => <span key={i} className="text-[9px] bg-red-500/5 border border-red-500/10 text-red-400/60 px-2 py-0.5 rounded truncate max-w-xs">{h}</span>)}</div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {iter.brainstorming_output && (
                                             <div className="bg-transparent border-none">
-                                                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 pl-8">Brainstorming & Reasoning</h3>
-                                                <div className="pl-8 pr-4 overflow-x-auto">
-                                                    <p className="text-xs text-slate-400 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-slate-700/50 pl-4 py-1">
-                                                        {iter.brainstorming_output}
-                                                    </p>
+                                                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Discovery Internal Monologue</h3>
+                                                <div>
+                                                    <p className="text-[11px] text-slate-500 font-mono whitespace-pre-wrap leading-relaxed py-1">{iter.brainstorming_output}</p>
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* Design Exploration Section */}
-                                        {(iter.design_screenshot_path || (iter.design_variants_paths && iter.design_variants_paths.length > 0)) && (
-                                            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg opacity-80 hover:opacity-100 transition-opacity">
-                                                <div className="p-4 bg-slate-800/30 flex items-center gap-2">
-                                                    <h2 className="font-semibold text-slate-400 text-xs uppercase tracking-widest border-b border-slate-700 pb-2 w-full">Design Exploration</h2>
-                                                </div>
+                                        {((iter.base_seed_paths?.length > 0) || (iter.design_variants_paths?.length > 0) || (iter.theme_variants_paths?.length > 0)) && (
+                                            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg p-6 space-y-8">
+                                                <h2 className="font-semibold text-slate-400 text-xs uppercase tracking-widest border-b border-slate-700 pb-2">Design Pipeline (5-5-5 Evolution)</h2>
                                                 
-                                                <div className="space-y-8">
-                                                    {iter.design_screenshot_path && (
-                                                        <div className="">
-                                                            <div className="px-4 md:px-6 mb-4">
-                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Base Design</span>
-                                                            </div>
-                                                            <div 
-                                                                className={`w-full relative cursor-pointer group`}
-                                                                onClick={() => setSelectedImage(`/viewer/public/${iter.design_screenshot_path}`)}
-                                                            >
-                                                                <img src={`/viewer/public/${iter.design_screenshot_path}`} alt="Base Design" className={`w-full h-auto object-contain border-y border-slate-800 transition-colors ${state.chosen_design_path === iter.design_screenshot_path ? 'bg-blue-500/5' : 'group-hover:bg-white/5'}`} style={{ maxHeight: '40vh' }} />
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                                                                        {iter.design_variants_paths && iter.design_variants_paths.length > 0 && (
-                                                                                                            <div className="pt-4 pb-6">
-                                                                                                                <div className="px-4 md:px-6 mb-6">
-                                                                                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Exploration Variants</span>
-                                                                                                                </div>
-                                                                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-y border-slate-800">
-                                                                                                                    {iter.design_variants_paths.map((vPath, idx) => (
-                                                                                                                        <div
-                                                                                                                            key={vPath}
-                                                                                                                            className={`w-full relative cursor-pointer group border-r border-slate-800 last:border-r-0`}
-                                                                                                                            onClick={() => setSelectedImage(`/viewer/public/${vPath}`)}
-                                                                                                                        >
-                                                                                                                            <img src={`/viewer/public/${vPath}`} alt={`Variant ${idx+1}`} className={`w-full h-auto object-contain transition-colors ${state.chosen_design_path === vPath ? 'bg-blue-500/5' : 'group-hover:bg-white/5'}`} style={{ maxHeight: '30vh' }} />
-                                                                                                                        </div>
-                                                                                                                    ))}
-                                                                                                                </div>
-                                                                                                            </div>
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            )}
-                                                    
-                                                                                            {/* Theme Exploration Section */}
-                                                                                            {iter.theme_variants_paths && iter.theme_variants_paths.length > 0 && (
-                                                                                                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg opacity-80 hover:opacity-100 transition-opacity mt-8">
-                                                                                                    <div className="p-4 bg-slate-800/30 flex items-center gap-2">
-                                                                                                        <h2 className="font-semibold text-slate-400 text-xs uppercase tracking-widest border-b border-slate-700 pb-2 w-full">Theme & Typography Pass</h2>
-                                                                                                    </div>
-                                                                                                    <div className="space-y-8 pt-4 pb-6">
-                                                                                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-y border-slate-800">
-                                                                                                            {iter.theme_variants_paths.map((vPath, idx) => (
-                                                                                                                <div
-                                                                                                                    key={vPath}
-                                                                                                                    className={`w-full relative cursor-pointer group border-r border-slate-800 last:border-r-0`}
-                                                                                                                    onClick={() => setSelectedImage(`/viewer/public/${vPath}`)}
-                                                                                                                >
-                                                                                                                    <img src={`/viewer/public/${vPath}`} alt={`Theme ${idx+1}`} className={`w-full h-auto object-contain transition-colors ${iter.chosen_theme_path === vPath ? 'bg-blue-500/5' : 'group-hover:bg-white/5'}`} style={{ maxHeight: '30vh' }} />
-                                                                                                                </div>
-                                                                                                            ))}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            )}
-                                        {/* Target UI Card */}
-                                        {(iter.chosen_design_path || iter.chosen_theme_path) && (
-                                            <div className="bg-slate-900 border-2 border-blue-500/40 rounded-xl overflow-hidden shadow-[0_0_30px_rgba(59,130,246,0.15)] relative">
-                                                <div className="absolute top-0 right-0 p-3 z-10">
-                                                    <span className="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg shadow-blue-500/50">TARGET UI</span>
-                                                </div>
-                                                <div className="p-4 bg-blue-950/20 flex items-center gap-2">
-                                                    <h2 className="font-bold text-blue-400 text-sm uppercase tracking-widest">Final Iteration Goal</h2>
-                                                </div>
-                                                
-                                                <div className="relative cursor-pointer group" onClick={() => setSelectedImage(`/viewer/public/${iter.chosen_theme_path || iter.chosen_design_path}`)}>
-                                                    <img src={`/viewer/public/${iter.chosen_theme_path || iter.chosen_design_path}`} alt="Target Design" className="w-full h-auto object-contain border-y border-blue-900/50" style={{ maxHeight: '70vh' }} />
-                                                </div>
-
-                                                {iter.design_review_critique && (
-                                                    <div className="p-6 bg-blue-950/5">
-                                                        <h3 className="text-[10px] font-bold text-blue-500/70 mb-2 uppercase tracking-widest">Layout Strategy</h3>
-                                                        <p className="text-xs text-blue-100/70 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-blue-500/50 pl-4 py-1">
-                                                            {iter.design_review_critique}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {iter.theme_review_critique && (
-                                                    <div className="p-6 bg-blue-950/10 border-t border-blue-900/20">
-                                                        <h3 className="text-[10px] font-bold text-blue-500/70 mb-2 uppercase tracking-widest">Theme Strategy</h3>
-                                                        <p className="text-xs text-blue-100/70 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-blue-500/50 pl-4 py-1">
-                                                            {iter.theme_review_critique}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Jules Implementation Attempts */}
-                                        {iter.attempts && iter.attempts.length > 0 && iter.attempts.map((att, idx) => {
-                                            let styles = {
-                                                card: "bg-slate-900 border border-blue-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.1)]",
-                                                header: "p-4 bg-blue-950/20 border-b border-blue-500/20 flex justify-between items-center",
-                                                title: "font-semibold text-blue-400 text-sm uppercase tracking-wider",
-                                                badge: "px-2 py-1 rounded text-xs font-bold bg-blue-500/20 text-blue-400",
-                                                imgBorderHover: "hover:border-blue-500/50"
-                                            };
-                                            if (att.score >= 8) {
-                                                styles = {
-                                                    card: "bg-slate-900 border border-emerald-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(16,185,129,0.1)]",
-                                                    header: "p-4 bg-emerald-950/20 border-b border-emerald-500/20 flex justify-between items-center",
-                                                    title: "font-semibold text-emerald-400 text-sm uppercase tracking-wider",
-                                                    badge: "px-2 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400",
-                                                    imgBorderHover: "hover:border-emerald-500/50"
-                                                };
-                                            } else if (att.score > 0) {
-                                                styles = {
-                                                    card: "bg-slate-900 border border-amber-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(245,158,11,0.1)]",
-                                                    header: "p-4 bg-amber-950/20 border-b border-amber-500/20 flex justify-between items-center",
-                                                    title: "font-semibold text-amber-400 text-sm uppercase tracking-wider",
-                                                    badge: "px-2 py-1 rounded text-xs font-bold bg-amber-500/20 text-amber-400",
-                                                    imgBorderHover: "hover:border-amber-500/50"
-                                                };
-                                            } else {
-                                                styles = {
-                                                    card: "bg-slate-900 border border-red-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(239,68,68,0.1)]",
-                                                    header: "p-4 bg-red-950/20 border-b border-red-500/20 flex justify-between items-center",
-                                                    title: "font-semibold text-red-400 text-sm uppercase tracking-wider",
-                                                    badge: "px-2 py-1 rounded text-xs font-bold bg-red-500/20 text-red-400",
-                                                    imgBorderHover: "hover:border-red-500/50"
-                                                };
-                                            }
-
-                                            return (
-                                                <div key={idx} id={`iter-${iter.id}-att-${att.attempt_number}`} className={styles.card}>
-                                                    <div className={styles.header}>
-                                                        <h2 className={styles.title}>Jules Attempt {att.attempt_number}</h2>
-                                                        <span className={styles.badge}>
-                                                            Score: {att.score}/10
-                                                        </span>
-                                                    </div>
-                                                    
-                                                    <div className="space-y-6">
-                                                        {/* App Screenshot */}
-                                                        <div>
-                                                            <div 
-                                                                className={`w-full relative cursor-pointer group`}
-                                                                onClick={() => setSelectedImage(att.app_screenshot_path ? `/viewer/public/${att.app_screenshot_path}` : null)}
-                                                            >
-                                                                {att.app_screenshot_path ? (
-                                                                    <img src={`/viewer/public/${att.app_screenshot_path}`} alt={`App Build Attempt ${att.attempt_number}`} className={`w-full h-auto object-contain border-b border-slate-800 transition-colors ${att.score >= 8 ? 'bg-emerald-500/5' : att.score > 0 ? 'bg-amber-500/5' : 'bg-red-500/5'}`} style={{ maxHeight: '70vh' }} />
-                                                                ) : (
-                                                                    <div className={`mx-4 md:mx-6 h-32 flex items-center justify-center rounded border-2 border-dashed ${att.score >= 8 ? 'border-emerald-500/30 text-emerald-500/50' : att.score > 0 ? 'border-amber-500/30 text-amber-500/50' : 'border-red-500/30 text-red-500/50'}`}>
-                                                                        <span className="text-xs font-mono uppercase tracking-widest">Failed to capture screenshot</span>
+                                                {iter.base_seed_paths?.length > 0 && (
+                                                    <div className="space-y-4">
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phase 1: Parallel Discovery Seeds</span>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                                            {iter.base_seed_paths.map((vPath, idx) => (
+                                                                <div key={idx} className="space-y-2">
+                                                                    <div onClick={() => vPath && setSelectedImage(`/viewer/public/${vPath}`)} className={`relative cursor-pointer border rounded-lg overflow-hidden transition-all ${iter.design_screenshot_path === vPath ? 'ring-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'border-slate-800 hover:border-slate-600'}`}>
+                                                                        {vPath ? <img src={`/viewer/public/${vPath}`} className="w-full h-auto object-contain" style={{maxHeight:'25vh'}} /> : <div className="h-32 bg-slate-800 animate-pulse"></div>}
+                                                                        {(vPath && iter.design_screenshot_path === vPath) && <div className="absolute top-1 right-1 bg-blue-500 text-white text-[7px] font-bold px-1 rounded shadow-lg">WINNER</div>}
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="px-4 md:px-6 pb-6 space-y-6">
-                                                            {/* Jules Code Diff Button */}
-                                                            {att.jules_patch_path && (
-                                                                <div>
-                                                                    <button 
-                                                                        onClick={() => togglePatch(att.jules_patch_path)}
-                                                                        className="w-full p-3 flex justify-between items-center bg-slate-800/30 hover:bg-slate-800/60 rounded border border-slate-700/50 transition-colors text-left"
-                                                                    >
-                                                                        <span className="text-xs font-bold text-slate-400 tracking-widest uppercase">View Code Diff</span>
-                                                                        <span className="text-slate-500 text-xs font-mono">{visiblePatches[att.jules_patch_path] ? '[Hide]' : '[Expand]'}</span>
-                                                                    </button>
-                                                                    
-                                                                    {visiblePatches[att.jules_patch_path] && (
-                                                                        <div className="mt-2 py-4 px-4 md:px-6 -mx-4 md:-mx-6 border-y border-slate-800 bg-[#0d1117] overflow-x-auto">
-                                                                            {patchContents[att.jules_patch_path] ? (
-                                                                                <pre className="text-[11px] font-mono leading-relaxed">
-                                                                                    {patchContents[att.jules_patch_path].split('\n').map((line, i) => {
-                                                                                        let color = "text-slate-300";
-                                                                                        if (line.startsWith('+')) color = "text-emerald-400 bg-emerald-400/10 inline-block w-full";
-                                                                                        if (line.startsWith('-')) color = "text-red-400 bg-red-400/10 inline-block w-full";
-                                                                                        if (line.startsWith('@@')) color = "text-blue-400";
-                                                                                        return <div key={i} className={color}>{line || ' '}</div>;
-                                                                                    })}
-                                                                                </pre>
-                                                                            ) : (
-                                                                                <div className="text-slate-500 text-xs animate-pulse font-mono">Loading patch contents...</div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
+                                                                    <p className="text-[9px] text-slate-500 leading-tight italic">{iter.base_briefs?.[idx] || "Drafting..."}</p>
                                                                 </div>
-                                                            )}
+                                                            ))}
+                                                        </div>
+                                                        {iter.seed_review_critique && (
+                                                            <div className="mt-4 p-4 bg-blue-950/10 rounded-lg">
+                                                                <h4 className="text-[9px] font-bold text-blue-400/70 uppercase tracking-widest mb-1">Seed Selection Reasoning</h4>
+                                                                <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{iter.seed_review_critique}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
 
-                                                            {/* Overseer Feedback */}
-                                                            {(() => {
-                                                                let title = "Vision Verification";
-                                                                let lineColor = "border-emerald-500/50";
-                                                                let textColor = "text-slate-400";
+                                                {iter.design_variants_paths?.length > 0 && (
+                                                    <div className="space-y-4 pt-4 border-t border-slate-800">
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phase 2: Layout Evolution</span>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                                            {iter.design_variants_paths.map((vPath, idx) => (
+                                                                <div key={idx} onClick={() => setSelectedImage(`/viewer/public/${vPath}`)} className={`relative cursor-pointer border rounded-lg overflow-hidden transition-all ${iter.chosen_design_path === vPath ? 'ring-2 ring-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'border-slate-800 hover:border-slate-600'}`}>
+                                                                    <img src={`/viewer/public/${vPath}`} className="w-full h-auto object-contain" style={{maxHeight:'25vh'}} />
+                                                                    {(vPath && iter.chosen_design_path === vPath) && <div className="absolute top-1 right-1 bg-blue-500 text-white text-[7px] font-bold px-1 rounded shadow-lg">WINNER</div>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        {iter.layout_review_critique && (
+                                                            <div className="mt-4 p-4 bg-blue-950/10 rounded-lg">
+                                                                <h4 className="text-[9px] font-bold text-blue-400/70 uppercase tracking-widest mb-1">Layout Selection Reasoning</h4>
+                                                                <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{iter.layout_review_critique}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
 
-                                                                if (att.critique && att.critique.includes("architecture needs work")) {
-                                                                    title = "Architectural Rejection";
-                                                                    lineColor = "border-orange-500/50";
-                                                                } else if (att.critique && att.critique.includes("failed to compile")) {
-                                                                    title = "Build Failure";
-                                                                    lineColor = "border-red-500/50";
-                                                                } else if (att.score < 8) {
-                                                                    lineColor = "border-amber-500/50";
-                                                                }
-                                                                
-                                                                return (
-                                                                    <div className="pt-4">
-                                                                        <h3 className="text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">{title}</h3>
-                                                                        <p className={`text-xs ${textColor} font-mono whitespace-pre-wrap leading-relaxed border-l-2 ${lineColor} pl-4 py-1`}>
-                                                                            {att.critique}
-                                                                        </p>
-                                                                    </div>
-                                                                );
-                                                            })()}
+                                                {iter.theme_variants_paths?.length > 0 && (
+                                                    <div className="space-y-4 pt-4 border-t border-slate-800">
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Phase 3: Materiality & Palette</span>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                                            {iter.theme_variants_paths.map((vPath, idx) => (
+                                                                <div key={idx} onClick={() => setSelectedImage(`/viewer/public/${vPath}`)} className={`relative cursor-pointer border rounded-lg overflow-hidden transition-all ${iter.chosen_theme_path === vPath ? 'ring-2 ring-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'border-slate-800 hover:border-slate-600'}`}>
+                                                                    <img src={`/viewer/public/${vPath}`} className="w-full h-auto object-contain" style={{maxHeight:'25vh'}} />
+                                                                    {(vPath && iter.chosen_theme_path === vPath) && <div className="absolute top-1 right-1 bg-emerald-500 text-white text-[7px] font-bold px-1 rounded shadow-lg">FINAL VIBE</div>}
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
+                                                )}
+                                            </div>
+                                        )}
 
-                                        {/* Live Jules Active Session */}
+                                        {(iter.chosen_theme_path || iter.chosen_design_path) && (
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                {/* Phase 1 Winner */}
+                                                {iter.design_screenshot_path && (
+                                                    <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg flex flex-col">
+                                                        <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
+                                                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phase 1: Seed</h3>
+                                                            <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-mono">SELECTED</span>
+                                                        </div>
+                                                        <div className="flex-1 bg-slate-950/30 p-0 flex items-center justify-center">
+                                                            <img src={`/viewer/public/${iter.design_screenshot_path}`} onClick={() => setSelectedImage(`/viewer/public/${iter.design_screenshot_path}`)} className="w-full h-auto cursor-pointer" />
+                                                        </div>
+                                                        {iter.seed_review_critique && (
+                                                            <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
+                                                                <p className="text-[9px] text-slate-500 font-mono line-clamp-4 hover:line-clamp-none transition-all">{iter.seed_review_critique}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Phase 2 Winner */}
+                                                {iter.chosen_design_path && (
+                                                    <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg flex flex-col">
+                                                        <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
+                                                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phase 2: Layout</h3>
+                                                            <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-mono">SELECTED</span>
+                                                        </div>
+                                                        <div className="flex-1 bg-slate-950/30 p-0 flex items-center justify-center">
+                                                            <img src={`/viewer/public/${iter.chosen_design_path}`} onClick={() => setSelectedImage(`/viewer/public/${iter.chosen_design_path}`)} className="w-full h-auto cursor-pointer" />
+                                                        </div>
+                                                         {iter.layout_review_critique && (
+                                                            <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
+                                                                <p className="text-[9px] text-slate-500 font-mono line-clamp-4 hover:line-clamp-none transition-all">{iter.layout_review_critique}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Phase 3 Winner */}
+                                                {iter.chosen_theme_path && (
+                                                    <div className="bg-slate-900 border border-emerald-500/30 rounded-xl overflow-hidden shadow-lg flex flex-col relative">
+                                                        <div className="absolute top-0 right-0 p-2 z-10"><span className="bg-emerald-500 text-white text-[8px] px-2 py-0.5 rounded-full font-bold shadow-lg">FINAL</span></div>
+                                                        <div className="p-3 bg-emerald-950/10 border-b border-emerald-500/20 flex justify-between items-center">
+                                                            <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Phase 3: Theme</h3>
+                                                        </div>
+                                                        <div className="flex-1 bg-slate-950/30 p-0 flex items-center justify-center">
+                                                            <img src={`/viewer/public/${iter.chosen_theme_path}`} onClick={() => setSelectedImage(`/viewer/public/${iter.chosen_theme_path}`)} className="w-full h-auto cursor-pointer" />
+                                                        </div>
+                                                         {iter.theme_review_critique && (
+                                                            <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
+                                                                <p className="text-[9px] text-slate-500 font-mono line-clamp-4 hover:line-clamp-none transition-all">{iter.theme_review_critique}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {iter.attempts?.map((att, i) => (
+                                            <div key={i} className={`bg-slate-900 border rounded-xl overflow-hidden shadow-lg ${att.score >= 8 ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
+                                                <div className={`p-4 flex justify-between items-center ${att.score >= 8 ? 'bg-emerald-950/20' : 'bg-red-950/20'} border-b`}>
+                                                    <h2 className="font-semibold text-xs uppercase">Attempt {att.attempt_number}</h2>
+                                                    <span className="px-2 py-1 rounded text-[10px] font-bold bg-slate-800">Score: {att.score}/10</span>
+                                                </div>
+                                                {att.app_screenshot_path && <img src={`/viewer/public/${att.app_screenshot_path}`} onClick={() => setSelectedImage(`/viewer/public/${att.app_screenshot_path}`)} className="w-full h-auto object-contain border-b border-slate-800 cursor-pointer" style={{maxHeight:'60vh'}} />}
+                                                <div className="p-6 space-y-4">
+                                                    {att.jules_patch_path && <button onClick={() => togglePatch(att.jules_patch_path)} className="w-full p-2 bg-slate-800/50 hover:bg-slate-800 rounded text-[10px] font-bold text-slate-400 uppercase tracking-widest">View Diff {visiblePatches[att.jules_patch_path] ? '▲' : '▼'}</button>}
+                                                    {visiblePatches[att.jules_patch_path] && <pre className="text-[10px] font-mono bg-[#0d1117] p-4 rounded overflow-x-auto">{patchContents[att.jules_patch_path]?.split('\n').map((line, i) => <div key={i} className={line.startsWith('+') ? 'text-emerald-400' : line.startsWith('-') ? 'text-red-400' : 'text-slate-400'}>{line}</div>)}</pre>}
+                                                    <div><h3 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Critique</h3><p className="text-xs text-slate-400 font-mono border-l-2 border-slate-700 pl-4">{att.critique}</p></div>
+                                                </div>
+                                            </div>
+                                        ))}
+
                                         {iter.id === state.current_iteration && state.active_jules_prompt && (
-                                            <div className="bg-slate-900 border border-blue-500/30 rounded-xl overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.1)] mt-8">
-                                                <div className="p-4 bg-blue-950/20 border-b border-blue-500/20 flex justify-between items-center">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="spinner border-blue-400 border-l-transparent w-4 h-4 border-2"></div>
-                                                        <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
-                                                            Jules is Coding...
-                                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6]"></span>
-                                                        </h3>
-                                                    </div>
-                                                    {state.active_jules_url && (
-                                                        <a href={state.active_jules_url} target="_blank" rel="noopener noreferrer" className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-1 rounded hover:bg-blue-500/40 transition-colors">
-                                                            View in Console [↗]
-                                                        </a>
-                                                    )}
-                                                </div>
-                                                <div className="p-5 space-y-4">
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Current Action</span>
-                                                        <div className="text-sm font-medium text-slate-200">
-                                                            {state.active_jules_action || "Initializing session..."}
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-2">Task Prompt</span>
-                                                        <div className="text-xs text-slate-400 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto border-l-2 border-blue-500/50 pl-4 py-1">
-                                                            {state.active_jules_prompt}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Architectural Review */}
-                                        {iter.architectural_critique && (
-                                            <div className="bg-transparent border-none">
-                                                <div className="flex items-center gap-2 mb-3 pl-8">
-                                                    <h2 className="font-semibold text-orange-400 text-[10px] uppercase tracking-widest">Architectural Review</h2>
-                                                </div>
-                                                <div className="pl-8 pr-4 overflow-x-auto">
-                                                    <p className="text-xs text-slate-400 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-orange-500/50 pl-4 py-1">
-                                                        {iter.architectural_critique}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        {/* Divider between iterations */}
-                                        {iter.id !== history[history.length - 1].id && (
-                                            <div className="w-full flex justify-center my-16">
-                                                <div className="h-16 w-px bg-gradient-to-b from-slate-700 to-transparent"></div>
+                                            <div className="bg-slate-900 border border-blue-500/30 rounded-xl overflow-hidden p-6 space-y-4 animate-pulse">
+                                                <div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="spinner border-blue-400 w-4 h-4 border-2"></div><h3 className="text-xs font-bold text-blue-400 uppercase">Jules Coding...</h3></div><a href={state.active_jules_url} target="_blank" className="text-[9px] text-blue-300">View Console [↗]</a></div>
+                                                <div className="text-[11px] font-medium text-slate-200">{state.active_jules_action || "Thinking..."}</div>
                                             </div>
                                         )}
                                     </div>
                                 ))}
-                                <div ref={scrollAnchorRef} className="h-4"></div>
                             </div>
                         </main>
                     </div>
 
-                    {/* Live Terminal Logger */}
-                    <div className="h-64 shrink-0 bg-[#0a0a0a] border-t border-slate-800 p-4 font-mono text-[11px] overflow-y-auto z-50 shadow-[0_-20px_40px_rgba(0,0,0,0.6)]" onScroll={handleLogScroll} ref={logContainerRef}>
-                        <div className="sticky top-0 right-0 flex justify-end pb-2 pointer-events-none">
-                             <div className="text-[10px] bg-slate-900 border border-slate-700 px-2 py-1 rounded text-slate-500 font-bold tracking-widest uppercase pointer-events-auto">Live Terminal Logs</div>
-                        </div>
-                        <div className="space-y-1.5 pb-4">
-                            {state.live_logs && state.live_logs.map((log, i) => {
-                                let color = "text-slate-400";
-                                let bg = "hover:bg-white/5";
-                                
-                                // Status Colors
-                                if (log.includes("ERROR") || log.includes("Failed")) color = "text-red-400 font-semibold";
-                                else if (log.includes("WARNING") || log.includes("Unhappy")) color = "text-amber-400 font-medium";
-                                else if (log.includes("INFO") && (log.includes("Score:") || log.includes("achieved") || log.includes("COMPLETE"))) color = "text-emerald-400 font-semibold";
-                                
-                                // Agent Colors
-                                else if (log.includes("Jules")) color = "text-blue-400";
-                                else if (log.includes("Stitch") || log.includes("design")) color = "text-fuchsia-400";
-                                else if (log.includes("Vision") || log.includes("Evaluating") || log.includes("Critique")) color = "text-purple-400";
-                                else if (log.includes("architectural") || log.includes("Architecture") || log.includes("Architectural")) color = "text-orange-400 font-bold";
-                                
-                                // System Colors
-                                else if (log.includes("git ")) color = "text-orange-300";
-                                else if (log.includes("Phoenix") || log.includes("Vite") || log.includes("http://localhost")) color = "text-yellow-300";
-                                else if (log.includes("Brainstorming") || log.includes("New Goal:") || log.includes("Next Idea:")) color = "text-cyan-400 font-bold";
-                                else if (log.includes("Loom Loop")) color = "text-emerald-500 font-bold tracking-wider";
-                                
-                                return <div key={i} className={`${color} ${bg} px-2 py-0.5 rounded transition-colors break-words`}>{log}</div>;
-                            })}
+                    <div className="h-48 shrink-0 bg-[#0a0a0a] border-t border-slate-800 p-4 font-mono text-[10px] overflow-y-auto" onScroll={(e) => isScrolledUpLogs.current = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight > 50} ref={logContainerRef}>
+                        <div className="space-y-1 pb-4">
+                            {state.live_logs?.map((log, i) => <div key={i} className={`${log.includes("ERROR") ? "text-red-400" : log.includes("Jules") ? "text-blue-400" : log.includes("Stitch") ? "text-fuchsia-400" : "text-slate-400"}`}>{log}</div>)}
                         </div>
                     </div>
                 </div>
             );
         }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>

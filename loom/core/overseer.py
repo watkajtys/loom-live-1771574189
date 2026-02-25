@@ -2,18 +2,35 @@ import os
 import shutil
 import time
 import logging
-from datetime import datetime
-import google.generativeai as genai
 import subprocess
+import concurrent.futures
+import re
+import json
+import random
+from enum import Enum
+from datetime import datetime
+
+import google.generativeai as genai
+from dotenv import load_dotenv
 
 from loom.core.state import ConductorState, LoopIteration, AttemptRecord
 from loom.environment.git import GitClient
 from loom.environment.phoenix import PhoenixServer
 from loom.agents.stitch import StitchClient
 from loom.agents.jules import JulesClient
+from loom.agents.mock_jules import MockJulesClient
 
-from dotenv import load_dotenv
 load_dotenv(override=True)
+
+logger = logging.getLogger("loom")
+
+class LoomPhase(Enum):
+    INSPIRATION = "Inspiration"
+    DESIGN = "Design"
+    IMPLEMENTATION = "Implementation"
+    VALIDATION = "Validation"
+    REFLECTION = "Reflection"
+    DECISION = "Decision"
 
 logger = logging.getLogger("loom")
 
@@ -21,9 +38,28 @@ class Overseer:
     def __init__(self):
         self.state = ConductorState.load()
         self.git = GitClient()
-        self.jules = JulesClient()
+        
+        # Use Mock Jules if requested
+        if os.getenv("USE_MOCK_JULES", "").lower() == "true":
+            logger.info("[bold yellow]Using Mock Jules Client (Local Gemini)[/bold yellow]", extra={"markup": True})
+            self.jules = MockJulesClient()
+        else:
+            self.jules = JulesClient()
+            
         self.stitch = StitchClient()
         self.phoenix = PhoenixServer()
+        
+        # Iteration-specific state
+        self.current_iteration_record = None
+        self.current_target_route = "/"
+        self.requires_design = True
+        self.current_brainstorm_output = None
+        self.test_scenario = ""
+        self.happiness_score = 0
+        self.last_critique = ""
+        self.app_screenshot = None
+        self.app_screenshot_path = None
+        self.patch_dest_rel = None
         
         # Ensure artifacts directory exists
         os.makedirs("viewer/public/artifacts", exist_ok=True)
@@ -35,16 +71,20 @@ class Overseer:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel('gemini-3.1-pro-preview')
 
-    def think(self, context: str, image_data: bytes = None) -> str:
-        """Consults the LLM for the next move."""
+    def think(self, context: str, image_data: bytes = None, temperature: float = 0.7) -> str:
+        """Consults the LLM for the next move with a hidden nonce to avoid caching."""
         if not hasattr(self, 'model'): return "Mock thought: Proceed."
         
-        prompt = f"You are the Overseer of Project Loom. We're building software together and you keep everything moving. Context: {context}"
+        import uuid
+        nonce = uuid.uuid4().hex[:8]
+        prompt = f"You are the Overseer of Project Loom. We're building software together. [Request ID: {nonce}] Context: {context}"
+        generation_config = genai.types.GenerationConfig(temperature=temperature)
+        
         if image_data:
             content = [prompt, {"mime_type": "image/png", "data": image_data}]
-            response = self.model.generate_content(content)
+            response = self.model.generate_content(content, generation_config=generation_config)
         else:
-            response = self.model.generate_content(prompt)
+            response = self.model.generate_content(prompt, generation_config=generation_config)
         return response.text
 
     def _take_screenshot(self, url_or_path: str, wait_ms: int = 5000, return_logs: bool = False):
@@ -140,8 +180,17 @@ FULL CODEBASE:
             logger.info(f"Phoenix Server is up. App is running. Verifying route {target_route} with Vision...")
             
             try:
-                # Navigate to the specific route for this iteration
-                app_screenshot, console_logs = self._take_screenshot(f"http://localhost:{self.phoenix.port}{target_route}", return_logs=True)
+                # Fallback Logic: If a Playwright evidence screenshot exists from the test run, use it!
+                # This ensures we are evaluating exactly what the test verified.
+                if self.app_screenshot_path and os.path.exists(f"viewer/public/{self.app_screenshot_path}"):
+                    logger.info(f"Using Playwright evidence screenshot: {self.app_screenshot_path}")
+                    with open(f"viewer/public/{self.app_screenshot_path}", "rb") as f:
+                        app_screenshot = f.read()
+                    console_logs = [] # We don't have logs for the evidence screenshot
+                else:
+                    # Navigate to the specific route for this iteration
+                    app_screenshot, console_logs = self._take_screenshot(f"http://localhost:{self.phoenix.port}{target_route}", return_logs=True)
+                
                 design_path = os.path.abspath("app/design/latest_design.html")
                 design_screenshot = self._take_screenshot(design_path, wait_ms=500) if os.path.exists(design_path) else None
                 
@@ -228,9 +277,6 @@ FULL CODEBASE:
             return
 
         logger.info("[bold yellow]No React project detected. Scaffolding initial application...[/bold yellow]", extra={"markup": True})
-        
-        # We'll use a pre-defined set of files to ensure a clean, working start for Jules
-        # instead of relying on interactive npm commands.
         
         # 1. Package.json
         package_json = {
@@ -394,416 +440,528 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         self.git.ensure_remote()
         self.ensure_scaffold()
         
-        current_brainstorm_output = None
-        # Recover target route from history if resuming
-        current_target_route = self.state.history[-1].target_route if self.state.history else "/"
-        requires_design = self.state.history[-1].requires_design if self.state.history else True
+        # Resume state if history exists
+        if self.state.history:
+            self.current_target_route = self.state.history[-1].target_route
+            self.requires_design = self.state.history[-1].requires_design
         
         while True:
-            # 1. Inspiration
-            if not self.state.inspiration_goal:
-                self.state.current_status = "Brainstorming initial goal..."
-                self.state.save()
-                logger.info("Generating initial open-ended inspiration goal...")
+            try:
+                # _step_inspiration now handles full iteration setup (incrementing, branch, record)
+                branch_name = self._step_inspiration()
+
+                self._step_design()
+                self._step_implementation(branch_name)
+                self._step_reflection()
+                self._step_decision(branch_name)
                 
-                memory_context = ""
-                if self.state.repo_memory.get("learnings"):
-                    memory_context = "\nPast Learnings:\n"
-                    for l in self.state.repo_memory["learnings"][-3:]: # only last 3 to save context
-                        status = "Success" if l['success'] else "Failure"
-                        memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
-                
-                prompt = f"""
-You are a Lead Product Designer at a world-class software studio (think Apple, Airbnb, or Vercel).
-Your specialty is taking standard, useful concepts and executing them with "Impossible Polish" and tactile interactivity.
+                time.sleep(10)
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                logger.error(f"Loop error: {e}")
+                time.sleep(30)
 
-We are starting a brand new React application (using Vite and Tailwind CSS).
-Your task is to generate the seed concept for this project.
+    def _step_inspiration(self) -> str:
+        self.state.current_phase = LoomPhase.INSPIRATION.value
+        if not self.state.inspiration_goal:
+            self.state.current_status = "Scanning market gaps for new Micro-SaaS opportunities..."
+            self.state.save()
+            logger.info("Overseer is conducting a Micro-SaaS product discovery pass...")
+            
+            import random
+            entropy_seed = random.getrandbits(64)
 
-[Random Seed for Variety: {int(time.time())}]
-{memory_context}
+            past_history = ""
+            if self.state.history:
+                past_history = "\n### LAB ARCHIVE (PREVIOUS PROTOTYPES)\nDo not repeat these specific product niches:\n"
+                for h in self.state.history[-10:]:
+                    past_history += f"- {h.goal[:100]}...\n"
 
-CRITICAL DIRECTIVE: Generate a "Real-World" product that a normal person or professional would immediately understand and want to use. 
-- AVOID: Niche developer tools (no API managers, no regex tools), and AVOID standard "bootcamp" tropes (no basic to-do lists).
-- FOCUS ON: 
-    1. **Personal Finance / Wealth:** Interactive, visual ways to track net worth or project future scenarios.
-    2. **Wellness / Mindset:** High-end spaces for reflection, habit tracking, or meditation that feel "atmospheric."
-    3. **Creative Workspaces:** Sophisticated tools for writers, designers, or collectors to organize their "treasures" or thoughts.
-    4. **Smart Utilities:** Modern versions of clocks, weather stations, or system monitors that feel like physical objects.
+            memory_context = ""
+            if self.state.repo_memory.get("learnings"):
+                memory_context = "\n### LAB TECHNICAL NOTES\n"
+                for l in self.state.repo_memory["learnings"][-3:]:
+                    status = "Success" if l['success'] else "Failure"
+                    memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
+            
+            prompt = f"""
+You are the Creative Director of a Boutique Consumer Product Studio. 
+Your goal is to identify a small, recurring "Human Annoyance" in daily life and invent a beautiful, single-purpose web application (Micro-SaaS) to solve it.
 
-1. Generate exactly 5 highly distinct software concepts in these categories. Ensure the ideas are functionally clear and buildable.
-2. For each idea, briefly weigh its potential for a stunning, polished UI and clear interactive functionality.
-3. Rank the 5 ideas. Rank them based on the best balance of UNIVERSAL UTILITY and "PREMIUM VIBE."
+[Studio Entropy Seed: {entropy_seed}]
+{past_history}
 
-CRITICAL: DO NOT describe specific colors, themes, dark/light modes, or exact visual aesthetics in your concept descriptions. Focus ONLY on the structure, features, and UX mechanics. We will let the design engine explore the aesthetic separately.
+CRITICAL DIRECTIVES:
+1. **SENSORY SIMPLICITY:** The product should do ONE thing with extreme elegance. It should feel like a "Haven" or a "Daily Ritual," not a chore.
+2. **HUMAN-CENTERED:** Avoid all "Power-User" or "Industrial" mechanics. Do not build dashboards, instruments, or command centers. 
+3. **BANNED CATEGORIES:** No DevTools, no B2B analytics, no engineering utilities, no crypto, no complex "platforms."
+4. **ALLOWED THEMES:** Wellness, Mindset, Parenting, Travel, Reading, Gardening, Home Rituals, Niche Hobbies.
+
+### YOUR TASK:
+1. Brainstorm 5 wildly different Consumer Micro-SaaS concepts. 
+2. For each idea, define the "Daily Ritual" it improves and the "Sensory Metaphor" (e.g. The Sanctuary, The Journal, The Compass, The Gallery).
+3. Select the concept that feels the most "Human" and "Indispensable."
+
+CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS SOUL.
 
 4. Output your choice using the following structured tags:
 
 [SELECTED CONCEPT]
-A detailed paragraph describing the app's architecture and core functionality. DO NOT include color or theme descriptions.
+A detailed paragraph describing the app's architecture and the emotional UX flow. 
 [TARGET_ROUTE]
-The URL path where the core feature will live (e.g. /)
+The URL path where the core experience will live (e.g. /haven)
 
 [REQUIRES_DESIGN]
-TRUE or FALSE (output FALSE if the feature is purely architectural, like state management or performance optimization, and requires no UI changes)
+TRUE or FALSE
 
 [TEST_SCENARIO]
-A concise, step-by-step description of how to verify this feature works (e.g. "Click the 'Add' button, type 'Hello' into the input, and verify 'Hello' appears in the list"). This will be used to generate the automated test.
+A simple, step-by-step description of how a person would use this to solve their annoyance.
 """
-                raw_response = self.think(prompt)
-                logger.info(f"Brainstorming Output:\n{raw_response}")
-                current_brainstorm_output = raw_response
-                
-                if "[SELECTED CONCEPT]" in raw_response:
-                    self.state.inspiration_goal = raw_response.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
-                else:
-                    self.state.inspiration_goal = raw_response.strip().split("\n")[-1]
+            raw_response = self.think(prompt, temperature=0.9)
+            logger.info(f"Studio Brainstorming Output:\n{raw_response}")
+            self.current_brainstorm_output = raw_response            
+            if "[SELECTED CONCEPT]" in raw_response:
+                self.state.inspiration_goal = raw_response.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
+            else:
+                self.state.inspiration_goal = raw_response.strip().split("\n")[-1]
 
-                if "[TARGET_ROUTE]" in raw_response:
-                    current_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+            if "[TARGET_ROUTE]" in raw_response:
+                self.current_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                
+            self.requires_design = True
+            if "[REQUIRES_DESIGN]" in raw_response:
+                req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                if "FALSE" in req_design_str:
+                    self.requires_design = False
                     
-                requires_design = True
-                if "[REQUIRES_DESIGN]" in raw_response:
-                    req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
-                    if "FALSE" in req_design_str:
-                        requires_design = False
-                        
-                test_scenario = ""
-                if "[TEST_SCENARIO]" in raw_response:
-                    test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
-                    
-                logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {requires_design})")
-                self.state.save()
-            # 2. Iteration Setup
-            self.state.current_iteration += 1
-            branch_name = f"iter-{self.state.current_iteration}"
-            self.git.checkout_branch(branch_name)
-            
-            # Setup Iteration Record
-            iteration_record = LoopIteration(
-                id=self.state.current_iteration,
-                timestamp=str(datetime.now()),
-                goal=self.state.inspiration_goal,
-                target_route=current_target_route,
-                requires_design=requires_design,
-                brainstorming_output=current_brainstorm_output
-            )
-            # Hack to store test_scenario for use in this loop iteration (not strictly persisted in state object yet, but available in local scope)
-            # In a real refactor, we should add test_scenario to LoopIteration model.
-            
-            self.state.history.append(iteration_record)
+            if "[TEST_SCENARIO]" in raw_response:
+                self.test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
+                
+            logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.requires_design})")
+
+        # Record current iteration parameters immediately
+        self.state.current_iteration += 1
+        branch_name = f"iter-{self.state.current_iteration}"
+        self.git.checkout_branch(branch_name)
+        
+        self.current_iteration_record = LoopIteration(
+            id=self.state.current_iteration,
+            timestamp=str(datetime.now()),
+            goal=self.state.inspiration_goal,
+            target_route=self.current_target_route,
+            requires_design=self.requires_design,
+            test_scenario=self.test_scenario,
+            negative_history=[h.goal for h in self.state.history[-5:] if h.goal],
+            brainstorming_output=self.current_brainstorm_output
+        )
+        self.state.history.append(self.current_iteration_record)
+        self.state.save()
+        return branch_name
+
+    def _step_design(self):
+        if not self.requires_design:
+            logger.info("Skipping Stitch design phase as REQUIRES_DESIGN is False.")
+            return
+
+        self.state.current_phase = LoomPhase.DESIGN.value
+        design_file = os.path.abspath("app/design/latest_design.html")
+
+        # ITERATION 2+ (EVOLUTION)
+        if self.state.current_iteration > 1 and getattr(self.state, 'stitch_project_id', None):
+            logger.info(f"Iteration {self.state.current_iteration}: Designing new feature in existing project...")
+            self.state.current_status = f"Designing new feature in existing project..."
             self.state.save()
             
-            # 3. Design (Stitch)
-            if requires_design:
-                self.state.current_status = f"Stitch is designing UI for Iteration {self.state.current_iteration}..."
-                self.state.save()
-                
-                if not self.state.stitch_project_id:
-                    try:
-                        self.state.stitch_project_id = self.stitch.create_project(self.state.project_name)
-                        self.state.save()
-                        self._update_env_file("STITCH_PROJECT_ID", self.state.stitch_project_id)
-                    except Exception as e:
-                        logger.error(f"Failed to create Stitch project: {e}")
-                
-                design_success = False
-                for attempt in range(3):
-                    try:
-                        logger.info(f"Generating base design (Attempt {attempt+1}/3)...")
-                        
-                        # Context-aware design prompt
-                        design_prompt = f"Application Identity: {self.state.app_meta}\n\nTask: {self.state.inspiration_goal}\n\nTarget Route: {current_target_route}"
-                        
-                        design_file, screen_id = self.stitch.generate_or_edit_screen(
-                            description=design_prompt,
-                            project_id=self.state.stitch_project_id or os.getenv("STITCH_PROJECT_ID", ""),
-                            screen_id=self.state.stitch_screen_id
-                        )
-                        
-                        if not design_file or not os.path.exists(design_file):
-                            raise Exception("Stitch did not return a valid HTML design.")
-                        
-                        # Save base design immediately
-                        design_src = os.path.abspath("app/design/reference.png")
-                        ts = int(time.time())
-                        if os.path.exists(design_src):
-                            base_design_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_base_design_{ts}.png"
-                            shutil.copy(design_src, base_design_dest)
-                            iteration_record.design_screenshot_path = f"artifacts/iter_{self.state.current_iteration}_base_design_{ts}.png"
-                            self.state.save()
-                        
-                        # Design Review Stage: Generate Variants and Pick the Best
-                        if screen_id:
-                            self.state.current_status = f"Overseer is reviewing design variants..."
-                            self.state.save()
-                            logger.info("Generating and reviewing design variants...")
-                            
-                            variants = []
-                            for var_attempt in range(3):
-                                try:
-                                    logger.info(f"Generating variants (Attempt {var_attempt+1}/3)...")
-                                    variants = self.stitch.generate_variants(
-                                        prompt=f"Explore distinct layouts for this concept: {self.state.inspiration_goal}. Preserve the theme defined in: {self.state.app_meta}",
-                                        project_id=self.state.stitch_project_id,
-                                        screen_id=screen_id,
-                                        count=3
-                                    )
-                                    if variants:
-                                        break
-                                except Exception as var_e:
-                                    logger.warning(f"Variant generation failed: {var_e}.")
-                                    time.sleep(5)
-                                    
-                            if not variants:
-                                logger.warning("Proceeding with base design as variants failed after 3 attempts.")
-                            
-                            if variants and hasattr(self, 'model'):
-                                iteration_record.design_variants_paths = []
-                                valid_variants = []
-                                ts = int(time.time())
-                                for idx, var in enumerate(variants):
-                                    if not var.get("img_bytes"):
-                                        continue
-                                    var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_variant_{idx+1}_{ts}.png"
-                                    with open(var_dest, "wb") as f:
-                                        f.write(var["img_bytes"])
-                                    iteration_record.design_variants_paths.append(f"artifacts/iter_{self.state.current_iteration}_variant_{idx+1}_{ts}.png")
-                                    valid_variants.append(var)
-                                    
-                                self.state.save()
-                                
-                                if valid_variants:
-                                    if not self.state.app_meta:
-                                        prompt_text = (
-                                            f"You are the Overseer. Goal: '{self.state.inspiration_goal}'.\n"
-                                            "1. Pick the most stunning and functional layout design.\n"
-                                            "2. CRITICAL SLOP CHECK: Reject generic, uninspired 'AI UI Slop' (e.g., overused purple/blue gradients, generic Inter/Roboto fonts, gratuitous glassmorphism, or boring standard dashboard layouts). Prefer designs with unique character, strong typography, and distinctive aesthetics.\n"
-                                            "3. Explain your reasoning for choosing it.\n"
-                                            "Output the integer index of your choice on the very last line of your response."
-                                        )
-                                    else:
-                                        prompt_text = (
-                                            f"You are the Overseer. Goal: '{self.state.inspiration_goal}'. Meta: {self.state.app_meta}\n"
-                                            "1. Pick the most stunning and functional design that aligns with the meta.\n"
-                                            "2. CRITICAL SLOP CHECK: Reject generic, uninspired 'AI UI Slop' (e.g., overused purple/blue gradients, generic Inter/Roboto fonts, gratuitous glassmorphism, or boring standard dashboard layouts). Prefer designs with unique character, strong typography, and distinctive aesthetics.\n"
-                                            "3. Explain your reasoning.\n"
-                                            "Output the integer index of your choice on the very last line of your response."
-                                        )
-                                    prompt = [prompt_text]
-                                    content = []
-                                    try:
-                                        with open(os.path.abspath("app/design/reference.png"), "rb") as f:
-                                            base_img_bytes = f.read()
-                                            prompt.append("Image 1: Base Design")
-                                            content.append({"mime_type": "image/png", "data": base_img_bytes})
-                                    except: pass
-    
-                                    for idx, var in enumerate(valid_variants):
-                                        img_num = idx + 2 if "Image 1: Base Design" in prompt else idx + 1
-                                        prompt.append(f"Image {img_num}: Variant {idx+1}")
-                                        content.append({"mime_type": "image/png", "data": var["img_bytes"]})
-                                        
-                                    review_response = self.model.generate_content([*prompt, *content])
-                                    review_text = review_response.text.strip()
-                                    iteration_record.design_review_critique = review_text
-                                    self.state.save()
-                                    
-                                    try:
-                                        lines = [l.strip() for l in review_text.split("\n") if l.strip()]
-                                        best_idx_raw = int(''.join(filter(str.isdigit, lines[-1])))
-                                        if "Image 1: Base Design" in prompt and best_idx_raw == 1:
-                                            iteration_record.chosen_design_path = iteration_record.design_screenshot_path
-                                        else:
-                                            var_idx = max(0, min(len(valid_variants) - 1, best_idx_raw - 2 if "Image 1: Base Design" in prompt else best_idx_raw - 1))
-                                            chosen_variant = valid_variants[var_idx]
-                                            screen_id = chosen_variant["screen_id"]
-                                            iteration_record.chosen_design_path = iteration_record.design_variants_paths[var_idx]
-                                            if chosen_variant.get("html_content"):
-                                                with open(design_file, "w", encoding="utf-8") as f:
-                                                    f.write(chosen_variant["html_content"])
-                                            if chosen_variant.get("img_bytes"):
-                                                with open(os.path.join("app", "design", "reference.png"), "wb") as f:
-                                                    f.write(chosen_variant["img_bytes"])
-                                                    
-                                        # Theme Pass (Iteration 1 only)
-                                        if not self.state.app_meta:
-                                            logger.info("Conducting Color & Typography Theme Pass...")
-                                            self.state.current_status = f"Exploring color and typography themes..."
-                                            self.state.save()
-                                            
-                                            theme_variants = []
-                                            for var_attempt in range(3):
-                                                try:
-                                                    logger.info(f"Generating theme variants (Attempt {var_attempt+1}/3)...")
-                                                    theme_variants = self.stitch.generate_variants(
-                                                        prompt="Explore completely distinct color palettes, dark/light modes, and typography combinations for this exact layout. Do not change the layout structure, only the visual theme.",
-                                                        project_id=self.state.stitch_project_id,
-                                                        screen_id=screen_id,
-                                                        count=3
-                                                    )
-                                                    if theme_variants: break
-                                                except Exception as var_e:
-                                                    logger.warning(f"Theme generation failed: {var_e}.")
-                                                    time.sleep(5)
-                                            
-                                            if theme_variants and hasattr(self, 'model'):
-                                                iteration_record.theme_variants_paths = []
-                                                valid_themes = []
-                                                t_ts = int(time.time())
-                                                for idx, var in enumerate(theme_variants):
-                                                    if var.get("img_bytes"):
-                                                        var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{t_ts}.png"
-                                                        with open(var_dest, "wb") as f:
-                                                            f.write(var["img_bytes"])
-                                                        iteration_record.theme_variants_paths.append(f"artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{t_ts}.png")
-                                                        valid_themes.append(var)
-                                                        
-                                                self.state.save()
-                                                        
-                                                if valid_themes:
-                                                    theme_prompt_text = (
-                                                        f"You are the Overseer. Goal: '{self.state.inspiration_goal}'.\n"
-                                                        "1. Pick the most stunning color and typography theme.\n"
-                                                        "2. CRITICAL SLOP CHECK: Reject generic, uninspired 'AI UI Slop' (e.g., overused purple/blue gradients, generic Inter/Roboto fonts, gratuitous glassmorphism). Prefer themes with unique character, strong typography combinations, and distinctive aesthetics.\n"
-                                                        "3. Explain your reasoning.\n"
-                                                        "4. Based on the chosen design, define the [APP_META] for the project (App Name, Core Value Proposition, Global Color Palette using Tailwind colors, and Typography).\n"
-                                                        "Output the integer index of your choice on the very last line of your response."
-                                                    )
-                                                    theme_prompt = [theme_prompt_text]
-                                                    theme_content = []
-                                                    if chosen_variant and chosen_variant.get("img_bytes"):
-                                                        theme_prompt.append("Image 1: Base Theme")
-                                                        theme_content.append({"mime_type": "image/png", "data": chosen_variant["img_bytes"]})
-                                                    for idx, var in enumerate(valid_themes):
-                                                        img_num = idx + 2 if chosen_variant and chosen_variant.get("img_bytes") else idx + 1
-                                                        theme_prompt.append(f"Image {img_num}: Theme {idx+1}")
-                                                        theme_content.append({"mime_type": "image/png", "data": var["img_bytes"]})
-                                                        
-                                                    theme_response = self.model.generate_content([*theme_prompt, *theme_content])
-                                                    theme_text = theme_response.text.strip()
-                                                    iteration_record.theme_review_critique = theme_text
-                                                    self.state.save()
-                                                    logger.info(f"Theme Review:\n{theme_text}")
-                                                    
-                                                    if "[APP_META]" in theme_text:
-                                                        meta_part = theme_text.split("[APP_META]")[1]
-                                                        self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
-                                                        with open("app/APP_META.md", "w", encoding="utf-8") as f:
-                                                            f.write(self.state.app_meta)
-                                                        try:
-                                                            self.git._run(["git", "add", "APP_META.md"], cwd="app")
-                                                            self.git.commit("chore: initialize app meta memory")
-                                                        except: pass
-
-                                                    t_lines = [l.strip() for l in theme_text.split("\n") if l.strip()]
-                                                    try:
-                                                        best_t_idx_raw = int(''.join(filter(str.isdigit, t_lines[-1])))
-                                                    except Exception:
-                                                        best_t_idx_raw = 1
-                                                        
-                                                    if chosen_variant and chosen_variant.get("img_bytes") and best_t_idx_raw == 1:
-                                                        chosen_t = chosen_variant
-                                                        iteration_record.chosen_theme_path = iteration_record.chosen_design_path
-                                                    else:
-                                                        best_t_idx = best_t_idx_raw - 2 if chosen_variant and chosen_variant.get("img_bytes") else best_t_idx_raw - 1
-                                                        best_t_idx = max(0, min(len(valid_themes) - 1, best_t_idx))
-                                                        chosen_t = valid_themes[best_t_idx]
-                                                        screen_id = chosen_t["screen_id"]
-                                                        iteration_record.chosen_theme_path = iteration_record.theme_variants_paths[best_t_idx]
-                                                        
-                                                    self.state.save()
-                                                    
-                                                    if chosen_t.get("html_content"):
-                                                        with open(design_file, "w", encoding="utf-8") as f:
-                                                            f.write(chosen_t["html_content"])
-                                                    if chosen_t.get("img_bytes"):
-                                                        with open(os.path.join("app", "design", "reference.png"), "wb") as f:
-                                                            f.write(chosen_t["img_bytes"])
-                                                            
-                                    except Exception as e:
-                                        logger.warning(f"Failed to parse variant selection: {e}")
-                                
-                            self.state.stitch_screen_id = screen_id
-                            self.state.save()
-                            design_success = True
-                            break 
-                    except Exception as e:
-                        logger.error(f"Failed to generate screen or variants: {e}")
-                        time.sleep(5)
-                        
-                if not design_success:
-                    logger.error("Failed to generate design after 3 attempts. Aborting iteration.")
-                    self.git.checkout_branch("main")
-                    continue 
-                    
-                self.git.commit(f"design: stitch output for iter {self.state.current_iteration}")
-            else:
-                logger.info(f"Skipping Stitch design phase as REQUIRES_DESIGN is False.")
+            prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.current_target_route}. Please design the UI for this feature (it could be a full page, a modal, or an overlay). Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
             
-            # Inner Refinement Loop
-            max_attempts = 50
-            current_attempt = 1
-            last_critique = ""
-            happiness = 0
-            attempt_branch = branch_name
-
-            while current_attempt <= max_attempts:
-                logger.info(f"--- Attempt {current_attempt}/{max_attempts} for Iteration {self.state.current_iteration} ---")
-                self.state.current_status = f"Jules is coding (Iteration {self.state.current_iteration}, Attempt {current_attempt})..."
+            screen_id = getattr(self.state, 'stitch_screen_id', None)
+            res_path, new_screen_id = self.stitch.generate_or_edit_screen(
+                description=prompt,
+                project_id=self.state.stitch_project_id,
+                screen_id=screen_id
+            )
+            
+            if res_path and os.path.exists(res_path):
+                with open(res_path, "r", encoding="utf-8") as f:
+                    html = f.read()
+                
+                img_path = os.path.abspath("app/design/reference.png")
+                ts = int(time.time())
+                evolved_rel_path = f"artifacts/iter_{self.state.current_iteration}_evolved_{ts}.png"
+                
+                if os.path.exists(img_path):
+                    shutil.copy(img_path, f"viewer/public/{evolved_rel_path}")
+                    self.current_iteration_record.chosen_design_path = evolved_rel_path
+                    self.current_iteration_record.chosen_theme_path = evolved_rel_path
+                
+                with open(design_file, "w", encoding="utf-8") as f:
+                    f.write(html)
+                    
+                self.state.stitch_screen_id = new_screen_id
                 self.state.save()
                 
-                attempt_branch = f"{branch_name}-att{current_attempt}"
+                self.git.commit(f"design: generated new screen for iter {self.state.current_iteration}")
+            return
+
+        # ITERATION 1 (REVOLUTION - 5-5-5)
+        self.state.current_status = f"Overseer is generating 5 structural hypotheses for the product..."
+        self.state.save()
+        
+        # 1. OVERSEER GENERATES DIVERGENT HYPOTHESES
+        brief_prompt = f"""
+You have invented the following product: '{self.state.inspiration_goal}'.
+Your task is to generate 5 wildly different 'Structural Hypotheses' for how this product could be realized.
+
+Avoid the 'Premium' trap (generic SaaS aesthetics). Instead, think about the specific materiality and UX density required:
+- Is it a dense industrial tool?
+- An elastic, playful playground?
+- A raw, information-first terminal?
+- A spatial, non-linear canvas?
+- A rhythmic, narrative-driven sequence?
+
+Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BRIEF 5].
+"""
+        brief_response = self.think(brief_prompt, temperature=0.9)
+        logger.info(f"Divergent Briefs:\n{brief_response}")
+        
+        briefs = []
+        import re
+        for i in range(1, 6):
+            match = re.search(f"\\[BRIEF {i}\\](.*?)(?=\\[BRIEF|$)", brief_response, re.DOTALL)
+            if match: briefs.append(match.group(1).strip())
+        
+        if not briefs:
+             briefs = ["Dense Industrial", "Elastic Playground", "Raw Information Terminal", "Spatial Canvas", "Narrative Sequence"]
+        
+        self.current_iteration_record.base_briefs = briefs
+        self.state.save()
+        
+        if not self.state.stitch_project_id:
+            try:
+                self.state.stitch_project_id = self.stitch.create_project(self.state.project_name)
+                self.state.save()
+                self._update_env_file("STITCH_PROJECT_ID", self.state.stitch_project_id)
+            except Exception as e:
+                logger.error(f"Failed to create Stitch project: {e}")
+
+        # 2. PARALLEL DISCOVERY (5 Independent Base Seeds in 5 Unique Projects)
+        logger.info(f"Generating 5 independent base seeds in parallel...")
+        self.state.current_status = "Phase 1: Generating 5 independent base seeds..."
+        self.state.save()
+        base_variants = [None] * 5
+        self.current_iteration_record.base_seed_paths = [None] * 5
+        design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.current_target_route}"
+        
+        import concurrent.futures
+        
+        def generate_seed_worker(i, brief):
+            try:
+                unique_project_name = f"Loom {self.state.current_iteration} - Hypothesis {i+1}"
+                p_id = self.stitch.create_project(unique_project_name)
+                
+                logger.info(f"Worker {i+1}: Generating Seed in Project {p_id}...")
+                res_path, s_id = self.stitch.generate_or_edit_screen(
+                    description=f"{design_prompt}\n\nSTRUCTURAL HYPOTHESIS: {brief}",
+                    project_id=p_id,
+                    screen_id=None 
+                )
+                if res_path and os.path.exists(res_path):
+                    with open(res_path, "r", encoding="utf-8") as f:
+                        html = f.read()
+                    img_path = os.path.abspath("app/design/reference.png")
+                    with open(img_path, "rb") as f:
+                        img_bytes = f.read()
+                    
+                    ts = int(time.time())
+                    seed_rel_path = f"artifacts/iter_{self.state.current_iteration}_seed_{i+1}_{ts}.png"
+                    with open(f"viewer/public/{seed_rel_path}", "wb") as f:
+                        f.write(img_bytes)
+                    
+                    self.current_iteration_record.base_seed_paths[i] = seed_rel_path
+                    self.state.save()
+                    
+                    return {
+                        "project_id": p_id, 
+                        "screen_id": s_id, 
+                        "html": html, 
+                        "img": img_bytes, 
+                        "brief": brief,
+                        "index": i
+                    }
+            except Exception as e:
+                logger.error(f"Worker {i+1} failed: {e}")
+                return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_seed = {executor.submit(generate_seed_worker, i, brief): i for i, brief in enumerate(briefs)}
+            results = []
+            for future in concurrent.futures.as_completed(future_to_seed):
+                res = future.result()
+                if res: results.append(res)
+
+        # Sort results back to original order
+        results.sort(key=lambda x: x["index"])
+        base_variants = [r for r in results if r is not None]
+
+        if not base_variants:
+            raise Exception("Failed to generate any base design seeds.")
+
+        # Overseer picks the best Base Seed
+        self.state.current_status = "Selecting the winning structural hypothesis..."
+        self.state.save()
+        
+        prompt = [f"Select the best Structural Hypothesis for: '{self.state.inspiration_goal}'.\n1. Analyze the strengths and weaknesses of each design.\n2. Explain which one best captures the 'soul' of the product.\n3. Output ONLY the integer index (1-{len(base_variants)}) on the very last line."]
+        content = []
+        for idx, var in enumerate(base_variants):
+            prompt.append(f"Image {idx+1}: {var['brief']}")
+            content.append({"mime_type": "image/png", "data": var["img"]})
+        
+        review_response = self.model.generate_content([*prompt, *content])
+        self.current_iteration_record.seed_review_critique = review_response.text.strip()
+        
+        try:
+            best_base_idx_raw = int(''.join(filter(str.isdigit, review_response.text.split("\n")[-1]))) - 1
+            best_base_idx = max(0, min(len(base_variants)-1, best_base_idx_raw))
+        except:
+            best_base_idx = 0
+            
+        winning_seed = base_variants[best_base_idx]
+        self.state.stitch_project_id = winning_seed["project_id"]
+        screen_id = winning_seed["screen_id"]
+        
+        self._update_env_file("STITCH_PROJECT_ID", self.state.stitch_project_id)
+        
+        with open(design_file, "w", encoding="utf-8") as f:
+            f.write(winning_seed["html"])
+        if winning_seed.get("img"):
+            with open(os.path.join("app", "design", "reference.png"), "wb") as f:
+                f.write(winning_seed["img"])
+        
+        self.current_iteration_record.design_screenshot_path = self.current_iteration_record.base_seed_paths[winning_seed["index"]]
+        self.state.save()
+
+        # 3. SINGLE-CALL LAYOUT REFINEMENT (5 Variants in One Call)
+        logger.info("Generating 5 layout variants of the winning seed in a single call...")
+        self.state.current_status = "Phase 2: Refining layout variants (5-way parallel)..."
+        self.state.save()
+        
+        layout_variants = self.stitch.generate_variants(
+            prompt=f"Explore 5 divergent layout refinements for this winning hypothesis. Focus on maximizing the intentionality of the UX for: {self.state.inspiration_goal}.",
+            project_id=self.state.stitch_project_id,
+            screen_id=screen_id,
+            count=5,
+            creative_range="EXPLORE",
+            aspects=["LAYOUT"]
+        )
+        
+        if layout_variants:
+            self.current_iteration_record.design_variants_paths = []
+            valid_layouts = []
+            ts = int(time.time())
+            for idx, var in enumerate(layout_variants):
+                if not var.get("img_bytes"): continue
+                var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_layout_{idx+1}_{ts}.png"
+                with open(var_dest, "wb") as f: f.write(var["img_bytes"])
+                self.current_iteration_record.design_variants_paths.append(f"artifacts/iter_{self.state.current_iteration}_layout_{idx+1}_{ts}.png")
+                valid_layouts.append(var)
+            
+            if valid_layouts:
+                # 6-Pack Vote: Include the Base Seed as Image 1
+                prompt = [f"Select the absolute best layout for: '{self.state.inspiration_goal}'.\nImage 1 is your current baseline. Images 2-6 are new variations.\n1. Evaluate the usability and intentionality of each layout.\n2. Choose the winner.\n3. Output ONLY the integer index (1-6) on the very last line."]
+                layout_content = []
+                
+                # Image 1: The Baseline (Winner of previous phase)
+                with open(f"viewer/public/{self.current_iteration_record.design_screenshot_path}", "rb") as f:
+                    layout_content.append({"mime_type": "image/png", "data": f.read()})
+                
+                for idx, var in enumerate(valid_layouts):
+                    layout_content.append({"mime_type": "image/png", "data": var["img_bytes"]})
+                
+                layout_res = self.model.generate_content([*prompt, *layout_content])
+                self.current_iteration_record.layout_review_critique = layout_res.text.strip()
                 try:
-                    self.git._run(["git", "checkout", "-b", attempt_branch], cwd="app")
-                except:
-                    self.git._run(["git", "checkout", attempt_branch], cwd="app")
+                    best_l_idx = int(''.join(filter(str.isdigit, layout_res.text.split("\n")[-1]))) - 1
+                    if best_l_idx == 0:
+                        # Stick with baseline (HTML is already on disk from previous stage)
+                        logger.info("Overseer chose to stick with the original Base Seed layout.")
+                        self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_screenshot_path
+                    else:
+                        # Pick new variant (adjust index for baseline offset)
+                        var_idx = best_l_idx - 1
+                        screen_id = valid_layouts[var_idx]["screen_id"]
+                        winning_layout = valid_layouts[var_idx]
+                        self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_variants_paths[var_idx]
+                        design_file = os.path.abspath("app/design/latest_design.html")
+                        if winning_layout.get("html_content"):
+                            with open(design_file, "w", encoding="utf-8") as f: f.write(winning_layout["html_content"])
+                        if winning_layout.get("img_bytes"):
+                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(winning_layout["img_bytes"])
+                except Exception as e:
+                    logger.warning(f"Failed to parse LLM layout index selection: {e}")
+            self.state.save()
 
-                # 4. Build & Test Generation (Jules)
-                memory_context = ""
-                if self.state.repo_memory.get("learnings"):
-                    memory_context = "\nPast Learnings:\n"
-                    for l in self.state.repo_memory["learnings"][-3:]:
-                        status = "Success" if l['success'] else "Failure"
-                        memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
+        # 4. SINGLE-CALL THEME PASS (5 Variants)
+        if not self.state.app_meta:
+            self._run_theme_pass(screen_id, count=5)
+        else:
+            logger.info("Applying existing App Meta theme to new layout...")
+            self.stitch.generate_or_edit_screen(
+                description=f"Apply this existing visual identity strictly: {self.state.app_meta}. Maintain the current layout exactly.",
+                project_id=self.state.stitch_project_id,
+                screen_id=screen_id
+            )
 
-                if current_attempt == 1:
-                    if requires_design:
-                        task_prompt = f"""
+        self.state.stitch_screen_id = screen_id
+        self.state.save()
+        self.git.commit(f"design: unconstrained 5-5-5 discovery for iter {self.state.current_iteration}")
+
+    def _run_theme_pass(self, screen_id, count=5):
+        logger.info(f"Conducting Theme Pass with {count} variants...")
+        self.state.current_status = f"Phase 3: Exploring {count} color and typography themes..."
+        self.state.save()
+        
+        theme_variants = self.stitch.generate_variants(
+            prompt=f"Explore {count} completely distinct color palettes, dark/light modes, and typography combinations for this layout. The goal is a high-intentionality feel for: {self.state.inspiration_goal}. Do not change the layout structure.",
+            project_id=self.state.stitch_project_id,
+            screen_id=screen_id,
+            count=count,
+            creative_range="EXPLORE",
+            aspects=["COLOR_SCHEME", "TEXT_FONT"]
+        )
+        
+        if theme_variants:
+            self.current_iteration_record.theme_variants_paths = []
+            valid_themes = []
+            t_ts = int(time.time())
+            for idx, var in enumerate(theme_variants):
+                if not var.get("img_bytes"): continue
+                var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{t_ts}.png"
+                with open(var_dest, "wb") as f: f.write(var["img_bytes"])
+                self.current_iteration_record.theme_variants_paths.append(f"artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{t_ts}.png")
+                valid_themes.append(var)
+            
+            if valid_themes:
+                # 6-Pack Vote: Include the selected Layout as Image 1
+                prompt = [f"Select the absolute best visual theme for: '{self.state.inspiration_goal}'.\nImage 1 is your current baseline. Images 2-6 are new color/typography explorations.\n1. Pick the best theme.\n2. Define [APP_META] (Name, Palette, Typography) for this winning choice.\nOutput index (1-6) on last line."]
+                theme_content = []
+                
+                # Image 1: The Baseline (Selected Layout from previous phase)
+                design_ref = os.path.abspath("app/design/reference.png")
+                if os.path.exists(design_ref):
+                    with open(design_ref, "rb") as f:
+                        theme_content.append({"mime_type": "image/png", "data": f.read()})
+                
+                for idx, var in enumerate(valid_themes):
+                    theme_content.append({"mime_type": "image/png", "data": var["img_bytes"]})
+                
+                theme_res = self.model.generate_content([*prompt, *theme_content])
+                theme_text = theme_res.text.strip()
+                self.current_iteration_record.theme_review_critique = theme_text
+                
+                if "[APP_META]" in theme_text:
+                    meta_part = theme_text.split("[APP_META]")[1]
+                    self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
+                    with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
+                
+                try:
+                    best_t_idx = int(''.join(filter(str.isdigit, theme_text.split("\n")[-1]))) - 1
+                    if best_t_idx == 0:
+                        logger.info("Overseer chose to stick with the baseline theme.")
+                    else:
+                        var_idx = best_t_idx - 1
+                        chosen_t = valid_themes[var_idx]
+                        self.current_iteration_record.chosen_theme_path = self.current_iteration_record.theme_variants_paths[var_idx]
+                        design_file = os.path.abspath("app/design/latest_design.html")
+                        if chosen_t.get("html_content"):
+                            with open(design_file, "w", encoding="utf-8") as f: f.write(chosen_t["html_content"])
+                        if chosen_t.get("img_bytes"):
+                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(chosen_t["img_bytes"])
+                except Exception as e:
+                    logger.warning(f"Failed to parse LLM theme index selection: {e}")
+            self.state.save()
+
+    def _step_implementation(self, branch_name):
+        self.state.current_phase = LoomPhase.IMPLEMENTATION.value
+        max_attempts = 50
+        current_attempt = 1
+        while current_attempt <= max_attempts:
+            logger.info(f"--- Attempt {current_attempt}/{max_attempts} for Iteration {self.state.current_iteration} ---")
+            self.state.current_status = f"Jules is coding (Attempt {current_attempt})..."
+            self.state.save()
+            
+            attempt_branch = f"{branch_name}-att{current_attempt}"
+            try: self.git._run(["git", "checkout", "-b", attempt_branch], cwd="app")
+            except Exception: self.git._run(["git", "checkout", attempt_branch], cwd="app")
+
+            task_prompt = self._get_jules_prompt(current_attempt)
+            self.git.push_branch(attempt_branch)
+            owner, repo_name = self._get_repo_info()
+            self.state.active_jules_prompt = task_prompt
+            self.state.save()
+
+            try:
+                self.jules.run_task(task_prompt, owner, repo_name, attempt_branch, 
+                                   activity_callback=lambda act, url: self._update_jules_state(act, url))
+                self.git.commit(f"feat: implementation attempt {current_attempt}")
+                self.git.push_branch(attempt_branch)
+            except Exception as e:
+                logger.error(f"Build failed: {e}")
+            finally:
+                self.state.active_jules_prompt = None
+                self.state.save()
+            
+            self._save_patch_artifact(current_attempt)
+            self._evaluate_iteration(current_attempt, attempt_branch)
+            
+            if self.happiness_score >= 8: break
+            current_attempt += 1
+
+    def _get_jules_prompt(self, attempt):
+        memory_context = ""
+        if self.state.repo_memory.get("learnings"):
+            memory_context = "\nPast Learnings:\n"
+            for l in self.state.repo_memory["learnings"][-3:]:
+                status = "Success" if l['success'] else "Failure"
+                memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
+
+        if attempt == 1:
+            if self.requires_design:
+                return f"""
 Implement the design for '{self.state.inspiration_goal}'.
 App Identity: {self.state.app_meta}
-Target Route: {current_target_route}
+Target Route: {self.current_target_route}
 {memory_context}
 
 The design files are in app/design. 
 CRITICAL RULES:
-1. Integrate this new feature into the existing application. 
-2. If '{current_target_route}' is a new route, set up React Router without breaking existing pages.
-3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`). 
-4. You MUST write a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{test_scenario}".
+1. Integrate this new feature into the existing application natively using the established design system (Tailwind classes, layout, components).
+2. The target flow/location is: '{self.current_target_route}'. If this requires a new page, set up React Router without breaking existing pages. If it is a modal/overlay, integrate it cleanly into the current view.
+3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).4. You MUST write a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.test_scenario}".
 5. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
 """
-                    else:
-                        task_prompt = f"""
+            else:
+                return f"""
 Implement the following architectural/logic feature: '{self.state.inspiration_goal}'.
 App Identity: {self.state.app_meta}
-Target Route: {current_target_route}
+Target Route: {self.current_target_route}
 {memory_context}
 
 CRITICAL RULES:
 1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout. 
 2. Focus purely on the underlying React logic, state management, or architecture as requested.
-3. You MUST write or update a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{test_scenario}".
+3. You MUST write or update a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.test_scenario}".
 4. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`.
 """
-                else:
-                    past_critiques = ""
-                    if iteration_record.attempts:     
-                        last_att = iteration_record.attempts[-1]
-                        past_critiques += f"\nPrevious Attempt {last_att.attempt_number} (Score: {last_att.score}/10) Critique:\n{last_att.critique}\n"
-                    task_prompt = f"""Refine the implementation. 
+        else:
+            past_critiques = ""
+            if self.current_iteration_record and self.current_iteration_record.attempts:     
+                last_att = self.current_iteration_record.attempts[-1]
+                past_critiques += f"\nPrevious Attempt {last_att.attempt_number} (Score: {last_att.score}/10) Critique:\n{last_att.critique}\n"
+            
+            return f"""Refine the implementation. 
 Meta: {self.state.app_meta}. 
-Route: {current_target_route}. 
+Route: {self.current_target_route}. 
 {memory_context}
 
 CRITICAL RULES:
@@ -814,189 +972,169 @@ Feedback:
 {past_critiques}
 """
 
-                self.git.push_branch(attempt_branch)
-                owner, repo_name = self._get_repo_info()
-                self.state.active_jules_prompt = task_prompt
-                self.state.save()
+    def _update_jules_state(self, action, url):
+        self.state.active_jules_action = action
+        self.state.active_jules_url = url
+        self.state.save()
 
-                def update_jules_state(action: str, url: str):
-                    self.state.active_jules_action = action
-                    self.state.active_jules_url = url
-                    self.state.save()
+    def _save_patch_artifact(self, attempt):
+        patch_src = "app/jules.patch"
+        self.patch_dest_rel = None
+        if os.path.exists(patch_src):
+            ts = int(time.time())
+            patch_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_att_{attempt}_{ts}.patch"
+            shutil.copy(patch_src, patch_dest)
+            self.patch_dest_rel = f"artifacts/iter_{self.state.current_iteration}_att_{attempt}_{ts}.patch"
 
-                try:
-                    self.jules.run_task(task_prompt, owner, repo_name, attempt_branch, activity_callback=update_jules_state)
-                    self.git.commit(f"feat: jules implementation attempt {current_attempt}")
-                    self.git.push_branch(attempt_branch)
-                except Exception as e:
-                    logger.error(f"Build failed: {e}")
-                finally:
-                    self.state.active_jules_prompt = None
-                    self.state.active_jules_action = None
-                    self.state.active_jules_url = None
-                    self.state.save()
-                    
-                patch_src = "app/jules.patch"
-                patch_dest_rel = None
-                if os.path.exists(patch_src):
-                    ts = int(time.time())
-                    patch_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_{ts}.patch"
-                    shutil.copy(patch_src, patch_dest)
-                    patch_dest_rel = f"artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_{ts}.patch"
+    def _evaluate_iteration(self, attempt, branch):
+        self.state.current_phase = LoomPhase.VALIDATION.value
+        logger.info(f"[bold cyan]Evaluating Attempt {attempt}...[/bold cyan]", extra={"markup": True})
+        self.state.current_status = f"Evaluating (Attempt {attempt})..."
+        self.state.save()
+        
+        # Reset score/critique for this attempt
+        self.happiness_score = 0
+        self.last_critique = ""
+        self.app_screenshot = None
 
-                self.state.current_status = f"Overseer is evaluating (Iteration {self.state.current_iteration}, Attempt {current_attempt})..."
-                self.state.save()
-                
-                logger.info("Verifying Build Integrity...")   
-                build_success = True
-                build_error = ""
-                try:
-                    subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd="app", check=True, capture_output=True, text=True, shell=True)
-                    subprocess.run(["npm", "run", "build"], cwd="app", check=True, capture_output=True, text=True, shell=True)
-                except subprocess.CalledProcessError as e:    
-                    build_success = False
-                    build_error = e.stderr or e.stdout        
-                except Exception as e:
-                    build_success = False
-                    build_error = str(e)
-                
-                test_success = True
-                test_error = ""
-                if build_success:
-                    logger.info("Verifying Playwright Integration Tests...")
-                    self.phoenix.spawn()
-                    self.phoenix.wait_for_ready()     
-                    try:
-                        # Install playwright browsers if not present
-                        subprocess.run(["npx", "playwright", "install", "chromium"], cwd="app", check=True, capture_output=True, text=True, shell=True)
-                        result = subprocess.run(["npx", "playwright", "test"], cwd="app", capture_output=True, text=True, shell=True)
-                        if result.returncode != 0:    
-                            test_success = False      
-                            test_error = result.stderr or result.stdout
-                        
-                                                # Check for Evidence
-                        if os.path.exists("app/evidence.png"):
-                            ts = int(time.time())
-                            evidence_path = f"viewer/public/artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_evidence_{ts}.png"
-                            shutil.move("app/evidence.png", evidence_path)
-                            app_screenshot_path = f"artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_evidence_{ts}.png"
-                            app_screenshot = None # We have the file, we don't need the bytes for memory
-                            logger.info(f"Evidence captured: {evidence_path}")
-                        else:
-                            logger.warning("No evidence.png found. Test might have failed before screenshot.")
-                            # Fallback: Take a screenshot of the current state for debugging
-                            try:
-                                app_screenshot = self._take_screenshot(f"http://localhost:{self.phoenix.port}/", wait_ms=2000)
-                            except Exception as e:
-                                logger.error(f"Fallback screenshot failed: {e}")
-                            
-                    except Exception as e:
-                        test_success = False
-                        test_error = str(e)
-                    finally:
-                        self.phoenix.kill()
-
-                if not build_success:
-                    happiness = 0
-                    last_critique = f"The application failed to compile. Build error:\n{build_error[:1000]}"
-                    app_screenshot = None
-                elif not test_success:
-                    happiness = 0
-                    last_critique = f"The Playwright integration tests failed. Test output:\n{test_error[:1500]}"
-                    # app_screenshot might be populated from fallback above
+        try:
+            # Build check
+            build_success, build_error = self._run_build()
+            if not build_success:
+                logger.error(f"Build failed for attempt {attempt}: {build_error}")
+                self.happiness_score, self.last_critique = 0, f"Build error: {build_error}"
+            else:
+                logger.info("Build successful.")
+                # Test check
+                test_success, test_error = self._run_tests(attempt)
+                if not test_success:
+                    logger.error(f"Tests failed for attempt {attempt}: {test_error}")
+                    self.happiness_score, self.last_critique = 0, f"Test error: {test_error}"
                 else:
-                    if requires_design:
-                        happiness, last_critique, app_screenshot = self.evaluate_happiness(target_route=current_target_route)
-                        logger.info(f"Visual Happiness Score: {happiness}/10")
+                    logger.info("Tests passed.")
+                    # Vision check
+                    if self.requires_design:
+                        self.happiness_score, self.last_critique, self.app_screenshot = self.evaluate_happiness(target_route=self.current_target_route)
                     else:
-                        happiness = 10
-                        last_critique = "Skipped visual evaluation (pure logic/architecture change)."
-                        app_screenshot = None
-                        logger.info("Logic change successful. Skipping Vision Check.")
-                
-                if happiness >= 8:
-                    arch_score, arch_critique = self.evaluate_architecture(branch_name)
-                    iteration_record.architectural_critique = arch_critique
-                    if arch_score < 8:
-                        happiness = arch_score
-                        last_critique = f"Visuals are good, but architecture needs work:\n\n{arch_critique}"
-                
-                app_screenshot_path = None
-                if app_screenshot:
-                    ts = int(time.time())
-                    app_screenshot_path = f"artifacts/iter_{self.state.current_iteration}_attempt_{current_attempt}_app_{ts}.png"
-                    with open(f"viewer/public/{app_screenshot_path}", "wb") as f:
-                        f.write(app_screenshot)
-                
-                attempt_record = AttemptRecord(
-                    attempt_number=current_attempt,
-                    prompt_used=task_prompt,
-                    app_screenshot_path=app_screenshot_path,
-                    jules_patch_path=patch_dest_rel,
-                    score=happiness,
-                    critique=last_critique
-                )
-                iteration_record.attempts.append(attempt_record)
-                iteration_record.happiness_score = happiness
-                self.state.save()
+                        self.happiness_score, self.last_critique = 10, "Logic update successful."
+                    
+                    # Arch check
+                    if self.happiness_score >= 8:
+                        arch_score, arch_critique = self.evaluate_architecture(branch)
+                        if arch_score < 8:
+                            self.happiness_score, self.last_critique = arch_score, f"Visuals good, arch bad: {arch_critique}"
+        except Exception as e:
+            logger.error(f"Evaluation crashed: {e}")
+            self.happiness_score, self.last_critique = 0, f"Evaluation error: {str(e)}"
 
-                if happiness >= 8:
-                    break
-                current_attempt += 1
+        # ALWAYS Record attempt
+        self._record_attempt(attempt)
 
-            # 6. Reflection Pass
-            logger.info("Conducting Reflection Pass...")
-            self.state.current_status = "Reflecting on iteration..."
-            self.state.save()
+    def _run_build(self):
+        try:
+            subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd="app", check=True, capture_output=True, text=True, shell=True)
+            subprocess.run(["npm", "run", "build"], cwd="app", check=True, capture_output=True, text=True, shell=True)
+            return True, ""
+        except subprocess.CalledProcessError as e: return False, e.stderr or e.stdout
+        except Exception as e: return False, str(e)
+
+    def _run_tests(self, attempt):
+        self.phoenix.spawn()
+        self.phoenix.wait_for_ready()
+        try:
+            # Install playwright browsers if not present
+            subprocess.run(["npx", "playwright", "install", "chromium"], cwd="app", check=True, capture_output=True, text=True, shell=True)
+            result = subprocess.run(["npx", "playwright", "test"], cwd="app", capture_output=True, text=True, shell=True)
             
-            reflection_prompt = f"""
+            # Check for Evidence
+            if os.path.exists("app/evidence.png"):
+                ts = int(time.time())
+                evidence_path = f"viewer/public/artifacts/iter_{self.state.current_iteration}_attempt_{attempt}_evidence_{ts}.png"
+                shutil.move("app/evidence.png", evidence_path)
+                # Store relative path for UI
+                self.app_screenshot_path = f"artifacts/iter_{self.state.current_iteration}_attempt_{attempt}_evidence_{ts}.png"
+                logger.info(f"Evidence captured: {evidence_path}")
+            
+            return result.returncode == 0, result.stderr or result.stdout
+        except Exception as e:
+            return False, str(e)
+        finally:
+            self.phoenix.kill()
+
+    def _record_attempt(self, attempt):
+        app_screenshot_path = None
+        if self.app_screenshot:
+            ts = int(time.time())
+            app_screenshot_path = f"artifacts/iter_{self.state.current_iteration}_attempt_{attempt}_app_{ts}.png"
+            with open(f"viewer/public/{app_screenshot_path}", "wb") as f:
+                f.write(self.app_screenshot)
+        
+        attempt_record = AttemptRecord(
+            attempt_number=attempt,
+            prompt_used=self._get_jules_prompt(attempt),
+            app_screenshot_path=app_screenshot_path,
+            jules_patch_path=self.patch_dest_rel,
+            score=self.happiness_score,
+            critique=self.last_critique
+        )
+        self.current_iteration_record.attempts.append(attempt_record)
+        self.current_iteration_record.happiness_score = self.happiness_score
+        self.state.save()
+
+    def _step_reflection(self):
+        self.state.current_phase = LoomPhase.REFLECTION.value
+        logger.info("Conducting Reflection Pass...")
+        self.state.current_status = "Reflecting on iteration..."
+        self.state.save()
+        
+        reflection_prompt = f"""
 We just completed an iteration attempting to implement: '{self.state.inspiration_goal}'.
-Final Happiness Score: {happiness}/10
-Final Critique: {last_critique}
+Final Happiness Score: {self.happiness_score}/10
+Final Critique: {self.last_critique}
+Final App Meta: {self.state.app_meta}
 
-Based on this outcome, provide a brief summary of what we learned (e.g., libraries that caused issues, architectural decisions that worked well, etc.). 
-Format your output as a single concise paragraph.
+Based on this outcome, provide a brief summary of what we learned. Format as a single concise paragraph.
 """
-            learnings = self.think(reflection_prompt)
-            logger.info(f"Learnings:\n{learnings}")
-            
-            if "learnings" not in self.state.repo_memory:
-                self.state.repo_memory["learnings"] = []
-            self.state.repo_memory["learnings"].append({
-                "iteration": self.state.current_iteration,
-                "goal": self.state.inspiration_goal,
-                "success": happiness >= 8,
-                "takeaways": learnings
-            })
-            self.state.save()
+        learnings = self.think(reflection_prompt)
+        logger.info(f"Learnings:\n{learnings}")
+        
+        if "learnings" not in self.state.repo_memory:
+            self.state.repo_memory["learnings"] = []
+        self.state.repo_memory["learnings"].append({
+            "iteration": self.state.current_iteration,
+            "goal": self.state.inspiration_goal,
+            "success": self.happiness_score >= 8,
+            "takeaways": learnings
+        })
+        self.state.save()
 
-            # 7. Final Decision for the Iteration
-            if happiness >= 8:
-                logger.info("Happiness achieved! Merging to main.")
-                self.git.checkout_branch("main")
-                try:
-                    self.git._run(["git", "merge", attempt_branch], cwd="app")
-                    self.git.push_branch("main")
-                    
-                    self.state.current_status = "Brainstorming next iteration..."
-                    self.state.save()
-                    
-                    logger.info("Brainstorming next addition...")
-                    
-                    try:
-                        src_tree = subprocess.check_output(["git", "ls-tree", "-r", "--name-only", "HEAD", "src/"], cwd="app", text=True)
-                    except Exception:
-                        src_tree = "src/ tree unavailable."
-                        
-                    memory_context = ""
-                    if self.state.repo_memory.get("learnings"):
-                        memory_context = "\nPast Learnings:\n"
-                        for l in self.state.repo_memory["learnings"][-3:]: # only last 3 to save context
-                            status = "Success" if l['success'] else "Failure"
-                            memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
+    def _step_decision(self, branch):
+        self.state.current_phase = LoomPhase.DECISION.value
+        if self.happiness_score >= 8:
+            logger.info("Happiness achieved! Merging to main.")
+            self.git.checkout_branch("main")
+            try:
+                self.git._run(["git", "merge", branch], cwd="app")
+                self.git.push_branch("main")
+                
+                self.state.current_status = "Brainstorming next iteration..."
+                self.state.save()
+                
+                logger.info("Brainstorming next addition...")
+                try: src_tree = subprocess.check_output(["git", "ls-tree", "-r", "--name-only", "HEAD", "src/"], cwd="app", text=True)
+                except Exception as e:
+                    logger.warning(f"Failed to read src/ tree: {e}")
+                    src_tree = "src/ tree unavailable."
+                
+                memory_context = ""
+                if self.state.repo_memory.get("learnings"):
+                    memory_context = "\nPast Learnings:\n"
+                    for l in self.state.repo_memory["learnings"][-3:]:
+                        status = "Success" if l['success'] else "Failure"
+                        memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
 
-                    next_prompt = f"""
-We just successfully implemented: '{self.state.inspiration_goal}' at route '{current_target_route}'. 
+                next_prompt = f"""
+We just successfully implemented: '{self.state.inspiration_goal}' at route '{self.current_target_route}'. 
 App Identity: {self.state.app_meta}
 {memory_context}
 
@@ -1005,69 +1143,35 @@ Current Codebase Files:
 {src_tree}
 ```
 
-Look at the attached screenshot. Based on the meta, codebase, and current state, what is the best next step?
-
+Based on the meta and state, what is the best next step?
 1. Generate 3 distinct new features or routes.
-2. Output your choice using the structured tags:
-
-[SELECTED CONCEPT]
-Paragraph description...
-
-[TARGET_ROUTE]
-The URL path (existing or new) where this will be visible.
-
-[REQUIRES_DESIGN]
-TRUE or FALSE (output FALSE if the feature is purely architectural, like state management or performance optimization, and requires no UI changes)
-
-[TEST_SCENARIO]
-A concise, step-by-step description of how to verify this feature works (e.g. "Click the 'Add' button, type 'Hello' into the input, and verify 'Hello' appears in the list"). This will be used to generate the automated test.
-
-[APP_META]
-Update the App Meta if you are adding new global systems or routes.
+2. Output choice using: [SELECTED CONCEPT], [TARGET_ROUTE], [REQUIRES_DESIGN], [TEST_SCENARIO], [APP_META].
 """
-                    next_idea = self.think(next_prompt, app_screenshot)
-                    logger.info(f"Iterative Brainstorming Output:\n{next_idea}")
-                    current_brainstorm_output = next_idea
-                    
-                    if "[SELECTED CONCEPT]" in next_idea:
-                        self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
-                    else:
-                        self.state.inspiration_goal = next_idea.strip().split("\n")[-1]
-
-                    if "[TARGET_ROUTE]" in next_idea:
-                        current_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
-
-                    requires_design = True
-                    if "[REQUIRES_DESIGN]" in next_idea:
-                        req_design_str = next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
-                        if "FALSE" in req_design_str:
-                            requires_design = False
-                            
-                    test_scenario = ""
-                    if "[TEST_SCENARIO]" in next_idea:
-                        test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
-
-                    if "[APP_META]" in next_idea:
-                        meta_part = next_idea.split("[APP_META]")[1]
-                        if "[" in meta_part:
-                            self.state.app_meta = meta_part.split("[")[0].strip()
-                        else:
-                            self.state.app_meta = meta_part.strip()
-                        
-                        with open("app/APP_META.md", "w", encoding="utf-8") as f:
-                            f.write(self.state.app_meta)
-                    
-                    self.state.save()
-                    
-                except Exception as e:
-                    logger.error(f"Merge to main failed: {e}. Resetting main.")
-                    self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
-            else:
-                logger.info("Max attempts reached. Abandoning iteration.")
-                self.git.checkout_branch("main")
-                self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
-                self.git._run(["git", "clean", "-fd"], cwd="app")
-                self.state.inspiration_goal = ""
+                next_idea = self.think(next_prompt, self.app_screenshot, temperature=0.8)
+                logger.info(f"Iterative Brainstorming Output:\n{next_idea}")
+                self.current_brainstorm_output = next_idea
+                
+                if "[SELECTED CONCEPT]" in next_idea:
+                    self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
+                if "[TARGET_ROUTE]" in next_idea:
+                    self.current_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                if "[REQUIRES_DESIGN]" in next_idea:
+                    self.requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                if "[TEST_SCENARIO]" in next_idea:
+                    self.test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
+                if "[APP_META]" in next_idea:
+                    meta_part = next_idea.split("[APP_META]")[1]
+                    self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
+                    with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
+                
                 self.state.save()
-            
-            time.sleep(10)
+            except Exception as e:
+                logger.error(f"Merge to main failed: {e}. Resetting main.")
+                self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
+        else:
+            logger.info("Max attempts reached. Abandoning iteration.")
+            self.git.checkout_branch("main")
+            self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
+            self.git._run(["git", "clean", "-fd"], cwd="app")
+            self.state.inspiration_goal = ""
+            self.state.save()

@@ -5,6 +5,7 @@ import requests
 from typing import Optional, Tuple
 from pathlib import Path
 from loom.agents.base import AgentProxy
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 
 logger = logging.getLogger("loom")
 DESIGN_DIR = Path("app/design")
@@ -79,9 +80,47 @@ class StitchClient(AgentProxy):
                     pass
         raise Exception("Failed to parse project creation response")
 
+    def create_design_system(self, project_id: str, color_mode: str, font: str, roundness: str, preset: str, description: str = "") -> str:
+        logger.info(f"Creating Design System for project {project_id}...")
+        arguments = {
+            "projectId": project_id,
+            "designSystem": {
+                "theme": {
+                    "colorMode": color_mode,
+                    "font": font,
+                    "roundness": roundness,
+                    "preset": preset,
+                    "description": description
+                }
+            }
+        }
+        
+        data = self._call_mcp("create_design_system", arguments, project_id)
+        result = data.get("result", {})
+        for block in result.get("content", []):
+            if block.get("type") == "text":
+                try:
+                    inner = json.loads(block.get("text", ""))
+                    name = inner.get("name", "")
+                    if name.startswith("assets/"):
+                        asset_id = name.split("/")[1]
+                        logger.info(f"New design system created: {asset_id}")
+                        return asset_id
+                except json.JSONDecodeError:
+                    pass
+        raise Exception("Failed to parse design system creation response")
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(Exception),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
     def generate_or_edit_screen(self, description: str, project_id: str, screen_id: Optional[str] = None) -> Tuple[str, str]:
         DESIGN_DIR.mkdir(parents=True, exist_ok=True)
-        enforced_description = description + "\n\nCRITICAL: You must generate a complete UI design based on this prompt. Do NOT ask any follow-up questions or request clarification."
+        import uuid
+        nonce = uuid.uuid4().hex[:8]
+        enforced_description = f"{description}\n\n[Request ID: {nonce}]\n\nCRITICAL: You must generate a complete UI design based on this prompt. Do NOT ask any follow-up questions or request clarification."
         
         if screen_id:
             logger.info(f"Editing existing screen {screen_id} in project {project_id} using GEMINI_3_PRO: {description}")
@@ -118,15 +157,19 @@ class StitchClient(AgentProxy):
                      raise Exception("Stitch Service Unavailable")
                 try:
                     inner_json = json.loads(raw_text)
-                    output_components = inner_json.get("outputComponents", [{}])
                     
-                    # Check if Stitch just returned conversational text instead of a design
-                    if "text" in output_components[0] and "design" not in output_components[0]:
-                        stitch_response = output_components[0]["text"]
-                        logger.warning(f"Stitch returned text instead of a design: {stitch_response}")
-                        raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
-                        
-                    screens = output_components[0].get("design", {}).get("screens", [])
+                    # Handle edit_screens response which returns an array of updated screens directly
+                    if method == "edit_screens":
+                        screens = inner_json if isinstance(inner_json, list) else [inner_json]
+                    else:
+                        # Handle generate_screen_from_text which uses outputComponents
+                        output_components = inner_json.get("outputComponents", [{}])
+                        if "text" in output_components[0] and "design" not in output_components[0]:
+                            stitch_response = output_components[0]["text"]
+                            logger.warning(f"Stitch returned text instead of a design: {stitch_response}")
+                            raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
+                        screens = output_components[0].get("design", {}).get("screens", [])
+                    
                     if screens:
                         screen = screens[0]
                         new_screen_id = screen.get("name", "").split("/")[-1] if screen.get("name") else screen_id
@@ -164,8 +207,16 @@ class StitchClient(AgentProxy):
             
         return str(design_file), new_screen_id
 
-    def generate_variants(self, prompt: str, project_id: str, screen_id: str, count: int = 3) -> list:
-        logger.info(f"Generating {count} variants for screen {screen_id} in project {project_id}: {prompt}")
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type(Exception),
+        before_sleep=before_sleep_log(logger, logging.WARNING)
+    )
+    def generate_variants(self, prompt: str, project_id: str, screen_id: str, count: int = 3, creative_range: str = "EXPLORE", aspects: list = None) -> list:
+        if aspects is None:
+            aspects = ["LAYOUT"]
+        logger.info(f"Generating {count} variants ({creative_range} - {aspects}) for screen {screen_id} in project {project_id}: {prompt}")
         method = "generate_variants"
         arguments = {
             "projectId": project_id,
@@ -175,7 +226,8 @@ class StitchClient(AgentProxy):
             "deviceType": "DESKTOP",
             "variantOptions": {
                 "variantCount": count,
-                "creativeRange": "EXPLORE"
+                "creativeRange": creative_range,
+                "aspects": aspects
             }
         }
         
