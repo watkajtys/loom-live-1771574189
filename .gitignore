@@ -7,3 +7,4 @@ session_state*.json
 __pycache__/
 *.pyc
 .idea/
+app/
