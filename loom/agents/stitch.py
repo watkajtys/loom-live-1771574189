@@ -116,8 +116,10 @@ class StitchClient(AgentProxy):
         retry=retry_if_exception_type(Exception),
         before_sleep=before_sleep_log(logger, logging.WARNING)
     )
-    def generate_or_edit_screen(self, description: str, project_id: str, screen_id: Optional[str] = None) -> Tuple[str, str]:
-        DESIGN_DIR.mkdir(parents=True, exist_ok=True)
+    def generate_or_edit_screen(self, description: str, project_id: str, screen_id: Optional[str] = None) -> list:
+        """
+        Returns a list of screen dictionaries: [{ "html": str, "images": [bytes], "screen_id": str }]
+        """
         import uuid
         nonce = uuid.uuid4().hex[:8]
         enforced_description = f"{description}\n\n[Request ID: {nonce}]\n\nCRITICAL: You must generate a complete UI design based on this prompt. Do NOT ask any follow-up questions or request clarification."
@@ -147,8 +149,7 @@ class StitchClient(AgentProxy):
         
         result = data.get("result", {})
         content_blocks = result.get("content", [])
-        html_content = ""
-        new_screen_id = None
+        all_screens = []
         
         for block in content_blocks:
             if block.get("type") == "text":
@@ -158,54 +159,55 @@ class StitchClient(AgentProxy):
                 try:
                     inner_json = json.loads(raw_text)
                     
-                    # Handle edit_screens response which returns an array of updated screens directly
                     if method == "edit_screens":
                         screens = inner_json if isinstance(inner_json, list) else [inner_json]
                     else:
-                        # Handle generate_screen_from_text which uses outputComponents
                         output_components = inner_json.get("outputComponents", [{}])
                         if "text" in output_components[0] and "design" not in output_components[0]:
                             stitch_response = output_components[0]["text"]
-                            logger.warning(f"Stitch returned text instead of a design: {stitch_response}")
                             raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
                         screens = output_components[0].get("design", {}).get("screens", [])
                     
-                    if screens:
-                        screen = screens[0]
-                        new_screen_id = screen.get("name", "").split("/")[-1] if screen.get("name") else screen_id
+                    for screen in screens:
+                        screen_data = {
+                            "screen_id": screen.get("name", "").split("/")[-1] or screen_id,
+                            "html": "",
+                            "images": []
+                        }
                         
-                        # Download Screenshot
+                        # Collect Primary Screenshot
                         if "screenshot" in screen:
                             img_url = screen["screenshot"].get("downloadUrl")
                             if img_url:
-                                logger.info(f"Downloading design screenshot from: {img_url}")
                                 img_resp = requests.get(img_url, timeout=30)
                                 if img_resp.ok:
-                                    img_file = DESIGN_DIR / "reference.png"
-                                    with open(img_file, "wb") as f:
-                                        f.write(img_resp.content)
+                                    screen_data["images"].append(img_resp.content)
+                        
+                        # Collect Additional Screenshots
+                        for add_img in screen.get("additionalScreenshots", []):
+                            add_url = add_img.get("downloadUrl")
+                            if add_url:
+                                add_resp = requests.get(add_url, timeout=30)
+                                if add_resp.ok:
+                                    screen_data["images"].append(add_resp.content)
 
                         # Download HTML
                         if "htmlCode" in screen:
                             download_url = screen["htmlCode"].get("downloadUrl")
                             if download_url:
-                                logger.info(f"Downloading HTML from: {download_url}")
                                 html_resp = requests.get(download_url, timeout=30)
                                 if html_resp.ok:
-                                    html_content = html_resp.text
+                                    screen_data["html"] = html_resp.text
+                        
+                        if screen_data["html"] or screen_data["images"]:
+                            all_screens.append(screen_data)
                 except json.JSONDecodeError:
-                    logger.warning("Could not parse inner JSON from Stitch response.")
+                    pass
 
-        if not html_content:
-            logger.warning("Stitch returned no HTML content. Using fallback.")
-            raise Exception("No HTML content generated.")
+        if not all_screens:
+            raise Exception("No design content generated.")
 
-        design_file = DESIGN_DIR / "latest_design.html"
-        DESIGN_DIR.mkdir(parents=True, exist_ok=True)
-        with open(design_file, "w", encoding="utf-8") as f:
-            f.write(html_content)
-            
-        return str(design_file), new_screen_id
+        return all_screens
 
     @retry(
         stop=stop_after_attempt(3),
@@ -214,9 +216,8 @@ class StitchClient(AgentProxy):
         before_sleep=before_sleep_log(logger, logging.WARNING)
     )
     def generate_variants(self, prompt: str, project_id: str, screen_id: str, count: int = 3, creative_range: str = "EXPLORE", aspects: list = None) -> list:
-        if aspects is None:
-            aspects = ["LAYOUT"]
-        logger.info(f"Generating {count} variants ({creative_range} - {aspects}) for screen {screen_id} in project {project_id}: {prompt}")
+        if aspects is None: aspects = ["LAYOUT"]
+        logger.info(f"Generating {count} variants for screen {screen_id} in project {project_id}: {prompt}")
         method = "generate_variants"
         arguments = {
             "projectId": project_id,
@@ -231,9 +232,7 @@ class StitchClient(AgentProxy):
             }
         }
         
-        logger.info(f"Calling Stitch API (method={method}, timeout=300s)...")
         data = self._call_mcp(method, arguments, project_id)
-        
         result = data.get("result", {})
         content_blocks = result.get("content", [])
         variants = []
@@ -241,50 +240,40 @@ class StitchClient(AgentProxy):
         for block in content_blocks:
             if block.get("type") == "text":
                 raw_text = block.get("text", "")
-                if "The service is currently unavailable" in raw_text:
-                     raise Exception("Stitch Service Unavailable")
                 try:
                     inner_json = json.loads(raw_text)
                     screens = inner_json.get("outputComponents", [{}])[0].get("design", {}).get("screens", [])
                     
-                    DESIGN_DIR.mkdir(parents=True, exist_ok=True)
-                    
                     for idx, screen in enumerate(screens):
-                        var_screen_id = screen.get("name", "").split("/")[-1] if screen.get("name") else f"var_{idx}"
-                        html_content = ""
-                        img_bytes = None
+                        variant_data = {
+                            "screen_id": screen.get("name", "").split("/")[-1] or f"var_{idx}",
+                            "html_content": "",
+                            "images": [] # All images for this variant
+                        }
                         
+                        # Primary Screenshot
                         if "screenshot" in screen:
                             img_url = screen["screenshot"].get("downloadUrl")
                             if img_url:
                                 img_resp = requests.get(img_url, timeout=30)
-                                if img_resp.ok:
-                                    img_bytes = img_resp.content
+                                if img_resp.ok: variant_data["images"].append(img_resp.content)
                                     
+                        # Additional Screenshots
+                        for add_img in screen.get("additionalScreenshots", []):
+                            add_url = add_img.get("downloadUrl")
+                            if add_url:
+                                add_resp = requests.get(add_url, timeout=30)
+                                if add_resp.ok: variant_data["images"].append(add_resp.content)
+
                         if "htmlCode" in screen:
                             download_url = screen["htmlCode"].get("downloadUrl")
                             if download_url:
                                 html_resp = requests.get(download_url, timeout=30)
-                                if html_resp.ok:
-                                    html_content = html_resp.text
+                                if html_resp.ok: variant_data["html_content"] = html_resp.text
                                     
-                        if html_content and img_bytes:
-                            var_html_path = DESIGN_DIR / f"variant_{idx}.html"
-                            var_img_path = DESIGN_DIR / f"variant_{idx}.png"
-                            
-                            with open(var_html_path, "w", encoding="utf-8") as f:
-                                f.write(html_content)
-                            with open(var_img_path, "wb") as f:
-                                f.write(img_bytes)
-                                
-                            variants.append({
-                                "screen_id": var_screen_id,
-                                "html_path": str(var_html_path),
-                                "img_path": str(var_img_path),
-                                "img_bytes": img_bytes,
-                                "html_content": html_content
-                            })
+                        if variant_data["html_content"] or variant_data["images"]:
+                            variants.append(variant_data)
                 except json.JSONDecodeError:
-                    logger.warning("Could not parse inner JSON from Stitch generate_variants response.")
+                    pass
         
         return variants

@@ -573,30 +573,35 @@ A simple, step-by-step description of how a person would use this to solve their
             self.state.current_status = f"Designing new feature in existing project..."
             self.state.save()
             
-            prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.current_target_route}. Please design the UI for this feature (it could be a full page, a modal, or an overlay). Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
+            prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.current_target_route}. Please design the UI for this feature. Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
             
             screen_id = getattr(self.state, 'stitch_screen_id', None)
-            res_path, new_screen_id = self.stitch.generate_or_edit_screen(
+            screens = self.stitch.generate_or_edit_screen(
                 description=prompt,
                 project_id=self.state.stitch_project_id,
                 screen_id=screen_id
             )
             
-            if res_path and os.path.exists(res_path):
-                with open(res_path, "r", encoding="utf-8") as f:
-                    html = f.read()
+            if screens:
+                winning_screen = screens[0] # Take first screen as primary for code
+                html_content = winning_screen["html"]
+                new_screen_id = winning_screen["screen_id"]
                 
-                img_path = os.path.abspath("app/design/reference.png")
                 ts = int(time.time())
-                evolved_rel_path = f"artifacts/iter_{self.state.current_iteration}_evolved_{ts}.png"
-                
-                if os.path.exists(img_path):
-                    shutil.copy(img_path, f"viewer/public/{evolved_rel_path}")
-                    self.current_iteration_record.chosen_design_path = evolved_rel_path
-                    self.current_iteration_record.chosen_theme_path = evolved_rel_path
+                # Capture all images for this screen
+                for idx, img_bytes in enumerate(winning_screen["images"]):
+                    evolved_rel_path = f"artifacts/iter_{self.state.current_iteration}_evolved_{idx}_{ts}.png"
+                    with open(f"viewer/public/{evolved_rel_path}", "wb") as f:
+                        f.write(img_bytes)
+                    if idx == 0:
+                        # Set primary reference for implementation
+                        with open("app/design/reference.png", "wb") as f:
+                            f.write(img_bytes)
+                        self.current_iteration_record.chosen_design_path = evolved_rel_path
+                        self.current_iteration_record.chosen_theme_path = evolved_rel_path
                 
                 with open(design_file, "w", encoding="utf-8") as f:
-                    f.write(html)
+                    f.write(html_content)
                     
                 self.state.stitch_screen_id = new_screen_id
                 self.state.save()
@@ -661,31 +666,30 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 p_id = self.stitch.create_project(unique_project_name)
                 
                 logger.info(f"Worker {i+1}: Generating Seed in Project {p_id}...")
-                res_path, s_id = self.stitch.generate_or_edit_screen(
+                screens = self.stitch.generate_or_edit_screen(
                     description=f"{design_prompt}\n\nSTRUCTURAL HYPOTHESIS: {brief}",
                     project_id=p_id,
                     screen_id=None 
                 )
-                if res_path and os.path.exists(res_path):
-                    with open(res_path, "r", encoding="utf-8") as f:
-                        html = f.read()
-                    img_path = os.path.abspath("app/design/reference.png")
-                    with open(img_path, "rb") as f:
-                        img_bytes = f.read()
-                    
+                if screens:
+                    win = screens[0]
                     ts = int(time.time())
-                    seed_rel_path = f"artifacts/iter_{self.state.current_iteration}_seed_{i+1}_{ts}.png"
-                    with open(f"viewer/public/{seed_rel_path}", "wb") as f:
-                        f.write(img_bytes)
+                    # Capture all images but pick first as primary
+                    seed_rel_path = None
+                    for img_idx, img_bytes in enumerate(win["images"]):
+                        path = f"artifacts/iter_{self.state.current_iteration}_seed_{i+1}_{img_idx}_{ts}.png"
+                        with open(f"viewer/public/{path}", "wb") as f:
+                            f.write(img_bytes)
+                        if img_idx == 0: seed_rel_path = path
                     
                     self.current_iteration_record.base_seed_paths[i] = seed_rel_path
                     self.state.save()
                     
                     return {
                         "project_id": p_id, 
-                        "screen_id": s_id, 
-                        "html": html, 
-                        "img": img_bytes, 
+                        "screen_id": win["screen_id"], 
+                        "html": win["html"], 
+                        "img": win["images"][0] if win["images"] else None, 
                         "brief": brief,
                         "index": i
                     }
@@ -715,7 +719,8 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
         content = []
         for idx, var in enumerate(base_variants):
             prompt.append(f"Image {idx+1}: {var['brief']}")
-            content.append({"mime_type": "image/png", "data": var["img"]})
+            if var.get("img"):
+                content.append({"mime_type": "image/png", "data": var["img"]})
         
         review_response = self.model.generate_content([*prompt, *content])
         self.current_iteration_record.seed_review_critique = review_response.text.strip()
@@ -760,10 +765,15 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             valid_layouts = []
             ts = int(time.time())
             for idx, var in enumerate(layout_variants):
-                if not var.get("img_bytes"): continue
-                var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_layout_{idx+1}_{ts}.png"
-                with open(var_dest, "wb") as f: f.write(var["img_bytes"])
-                self.current_iteration_record.design_variants_paths.append(f"artifacts/iter_{self.state.current_iteration}_layout_{idx+1}_{ts}.png")
+                if not var.get("images"): continue
+                # Capture all images for variant, pick first for primary path
+                primary_path = None
+                for img_idx, img_bytes in enumerate(var["images"]):
+                    var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_layout_{idx+1}_{img_idx}_{ts}.png"
+                    with open(var_dest, "wb") as f: f.write(img_bytes)
+                    if img_idx == 0: primary_path = f"artifacts/iter_{self.state.current_iteration}_layout_{idx+1}_{img_idx}_{ts}.png"
+                
+                self.current_iteration_record.design_variants_paths.append(primary_path)
                 valid_layouts.append(var)
             
             if valid_layouts:
@@ -776,18 +786,16 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                     layout_content.append({"mime_type": "image/png", "data": f.read()})
                 
                 for idx, var in enumerate(valid_layouts):
-                    layout_content.append({"mime_type": "image/png", "data": var["img_bytes"]})
+                    layout_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
                 layout_res = self.model.generate_content([*prompt, *layout_content])
                 self.current_iteration_record.layout_review_critique = layout_res.text.strip()
                 try:
                     best_l_idx = int(''.join(filter(str.isdigit, layout_res.text.split("\n")[-1]))) - 1
                     if best_l_idx == 0:
-                        # Stick with baseline (HTML is already on disk from previous stage)
                         logger.info("Overseer chose to stick with the original Base Seed layout.")
                         self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_screenshot_path
                     else:
-                        # Pick new variant (adjust index for baseline offset)
                         var_idx = best_l_idx - 1
                         screen_id = valid_layouts[var_idx]["screen_id"]
                         winning_layout = valid_layouts[var_idx]
@@ -795,8 +803,8 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         design_file = os.path.abspath("app/design/latest_design.html")
                         if winning_layout.get("html_content"):
                             with open(design_file, "w", encoding="utf-8") as f: f.write(winning_layout["html_content"])
-                        if winning_layout.get("img_bytes"):
-                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(winning_layout["img_bytes"])
+                        if winning_layout.get("images"):
+                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(winning_layout["images"][0])
                 except Exception as e:
                     logger.warning(f"Failed to parse LLM layout index selection: {e}")
             self.state.save()
@@ -806,11 +814,20 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             self._run_theme_pass(screen_id, count=5)
         else:
             logger.info("Applying existing App Meta theme to new layout...")
-            self.stitch.generate_or_edit_screen(
+            screens = self.stitch.generate_or_edit_screen(
                 description=f"Apply this existing visual identity strictly: {self.state.app_meta}. Maintain the current layout exactly.",
                 project_id=self.state.stitch_project_id,
                 screen_id=screen_id
             )
+            if screens:
+                win = screens[0]
+                design_file = os.path.abspath("app/design/latest_design.html")
+                with open(design_file, "w", encoding="utf-8") as f:
+                    f.write(win["html"])
+                if win["images"]:
+                    with open(os.path.abspath("app/design/reference.png"), "wb") as f:
+                        f.write(win["images"][0])
+                screen_id = win["screen_id"]
 
         self.state.stitch_screen_id = screen_id
         self.state.save()
@@ -835,10 +852,14 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             valid_themes = []
             t_ts = int(time.time())
             for idx, var in enumerate(theme_variants):
-                if not var.get("img_bytes"): continue
-                var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{t_ts}.png"
-                with open(var_dest, "wb") as f: f.write(var["img_bytes"])
-                self.current_iteration_record.theme_variants_paths.append(f"artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{t_ts}.png")
+                if not var.get("images"): continue
+                primary_path = None
+                for img_idx, img_bytes in enumerate(var["images"]):
+                    var_dest = f"viewer/public/artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{img_idx}_{t_ts}.png"
+                    with open(var_dest, "wb") as f: f.write(img_bytes)
+                    if img_idx == 0: primary_path = f"artifacts/iter_{self.state.current_iteration}_theme_{idx+1}_{img_idx}_{t_ts}.png"
+                
+                self.current_iteration_record.theme_variants_paths.append(primary_path)
                 valid_themes.append(var)
             
             if valid_themes:
@@ -853,7 +874,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         theme_content.append({"mime_type": "image/png", "data": f.read()})
                 
                 for idx, var in enumerate(valid_themes):
-                    theme_content.append({"mime_type": "image/png", "data": var["img_bytes"]})
+                    theme_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
                 theme_res = self.model.generate_content([*prompt, *theme_content])
                 theme_text = theme_res.text.strip()
@@ -875,8 +896,8 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         design_file = os.path.abspath("app/design/latest_design.html")
                         if chosen_t.get("html_content"):
                             with open(design_file, "w", encoding="utf-8") as f: f.write(chosen_t["html_content"])
-                        if chosen_t.get("img_bytes"):
-                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(chosen_t["img_bytes"])
+                        if chosen_t.get("images"):
+                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(chosen_t["images"][0])
                 except Exception as e:
                     logger.warning(f"Failed to parse LLM theme index selection: {e}")
             self.state.save()
@@ -1173,5 +1194,17 @@ Based on the meta and state, what is the best next step?
             self.git.checkout_branch("main")
             self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
             self.git._run(["git", "clean", "-fd"], cwd="app")
+            
+            # If we don't have any previous successful iterations, the genesis project failed.
+            # We must wipe the design identity so the next loop starts a fresh genesis project.
+            if not any(h.happiness_score >= 8 for h in self.state.history[:-1]):
+                logger.warning("Genesis project failed. Resetting design state to restart 5-5-5 genesis.")
+                self.state.stitch_project_id = None
+                self.state.stitch_screen_id = None
+                self.state.app_meta = ""
+                if os.path.exists("app/APP_META.md"):
+                    try: os.remove("app/APP_META.md")
+                    except: pass
+            
             self.state.inspiration_goal = ""
             self.state.save()
