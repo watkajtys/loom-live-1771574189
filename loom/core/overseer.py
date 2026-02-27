@@ -451,16 +451,22 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 # _step_inspiration now handles full iteration setup (incrementing, branch, record)
                 branch_name = self._step_inspiration()
 
-                self._step_design()
-                self._step_implementation(branch_name)
-                self._step_reflection()
+                try:
+                    self._step_design()
+                    self._step_implementation(branch_name)
+                    self._step_reflection()
+                except Exception as step_error:
+                    logger.error(f"Iteration aborted due to step error: {step_error}")
+                    self.happiness_score = 0
+                    self.last_critique = f"Aborted during phase {self.state.current_phase}: {step_error}"
+
                 self._step_decision(branch_name)
                 
                 time.sleep(10)
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                logger.error(f"Loop error: {e}")
+                logger.error(f"Critical loop error: {e}")
                 time.sleep(30)
 
     def _step_inspiration(self) -> str:
