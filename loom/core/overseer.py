@@ -1018,6 +1018,7 @@ Feedback:
         self.happiness_score = 0
         self.last_critique = ""
         self.app_screenshot = None
+        self.app_screenshot_path = None
 
         try:
             # Build check
