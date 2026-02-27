@@ -180,20 +180,34 @@ FULL CODEBASE:
             logger.info(f"Phoenix Server is up. App is running. Verifying route {target_route} with Vision...")
             
             try:
-                # Fallback Logic: If a Playwright evidence screenshot exists from the test run, use it!
-                # This ensures we are evaluating exactly what the test verified.
+                # 1. Capture Live App
                 if self.app_screenshot_path and os.path.exists(f"viewer/public/{self.app_screenshot_path}"):
                     logger.info(f"Using Playwright evidence screenshot: {self.app_screenshot_path}")
                     with open(f"viewer/public/{self.app_screenshot_path}", "rb") as f:
                         app_screenshot = f.read()
-                    console_logs = [] # We don't have logs for the evidence screenshot
+                    console_logs = [] 
                 else:
-                    # Navigate to the specific route for this iteration
                     app_screenshot, console_logs = self._take_screenshot(f"http://localhost:{self.phoenix.port}{target_route}", return_logs=True)
                 
-                design_path = os.path.abspath("app/design/latest_design.html")
-                design_screenshot = self._take_screenshot(design_path, wait_ms=500) if os.path.exists(design_path) else None
+                # 2. Collect ALL reference images for this iteration
+                ref_images = []
+                # Always include the primary reference.png if it exists
+                ref_primary = os.path.abspath("app/design/reference.png")
+                if os.path.exists(ref_primary):
+                    with open(ref_primary, "rb") as f:
+                        ref_images.append(f.read())
                 
+                # Look for other images in the artifacts directory for this iteration
+                artifact_dir = "viewer/public/artifacts"
+                if os.path.exists(artifact_dir):
+                    iter_prefix = f"iter_{self.state.current_iteration}_"
+                    for f_name in os.listdir(artifact_dir):
+                        if f_name.startswith(iter_prefix) and f_name.endswith(".png"):
+                            # Filter for images that were part of the chosen design path
+                            if "evolved" in f_name or "seed" in f_name or "theme" in f_name:
+                                with open(os.path.join(artifact_dir, f_name), "rb") as f:
+                                    ref_images.append(f.read())
+
                 if hasattr(self, 'model'):
                     prompt = [
                         f"You are the Overseer. Your goal was to implement: '{self.state.inspiration_goal}'.\n",
@@ -203,9 +217,10 @@ FULL CODEBASE:
                     ]
                     content = [{"mime_type": "image/png", "data": app_screenshot}]
                     
-                    if design_screenshot:
-                        prompt.append("The second image is the target design we are trying to achieve.")
-                        content.append({"mime_type": "image/png", "data": design_screenshot})
+                    if ref_images:
+                        prompt.append(f"The following {len(ref_images)} images are the target design references we are trying to achieve (Desktop, Mobile, or variants).")
+                        for img_bytes in ref_images[:5]: # Limit to 5 images to avoid token blowup
+                            content.append({"mime_type": "image/png", "data": img_bytes})
                         
                     prompt.append("Score how well the actual app matches the target design and the core App Identity from 0 to 10. Pay special attention to whether the new feature was integrated correctly without destroying existing UI. Output ONLY the integer score on the first line, followed by a brief critique on the next lines.")
                     
@@ -590,27 +605,40 @@ A simple, step-by-step description of how a person would use this to solve their
             )
             
             if screens:
-                winning_screen = screens[0] # Take first screen as primary for code
-                html_content = winning_screen["html"]
-                new_screen_id = winning_screen["screen_id"]
-                
+                # Clear old design files to prevent stale references
+                for f in os.listdir("app/design"):
+                    if f.endswith(".html") or f.endswith(".png"):
+                        try: os.remove(os.path.join("app/design", f))
+                        except: pass
+
                 ts = int(time.time())
-                # Capture all images for this screen
-                for idx, img_bytes in enumerate(winning_screen["images"]):
-                    evolved_rel_path = f"artifacts/iter_{self.state.current_iteration}_evolved_{idx}_{ts}.png"
-                    with open(f"viewer/public/{evolved_rel_path}", "wb") as f:
-                        f.write(img_bytes)
-                    if idx == 0:
-                        # Set primary reference for implementation
-                        with open("app/design/reference.png", "wb") as f:
-                            f.write(img_bytes)
-                        self.current_iteration_record.chosen_design_path = evolved_rel_path
-                        self.current_iteration_record.chosen_theme_path = evolved_rel_path
-                
-                with open(design_file, "w", encoding="utf-8") as f:
-                    f.write(html_content)
+                for i, screen in enumerate(screens):
+                    html_content = screen["html"]
+                    new_screen_id = screen["screen_id"]
                     
-                self.state.stitch_screen_id = new_screen_id
+                    # Capture all images for this screen
+                    for idx, img_bytes in enumerate(screen["images"]):
+                        evolved_rel_path = f"artifacts/iter_{self.state.current_iteration}_evolved_{i}_{idx}_{ts}.png"
+                        with open(f"viewer/public/{evolved_rel_path}", "wb") as f:
+                            f.write(img_bytes)
+                        
+                        # Save in app/design for Jules
+                        ref_name = "reference.png" if i == 0 and idx == 0 else f"reference_{i}_{idx}.png"
+                        with open(f"app/design/{ref_name}", "wb") as f:
+                            f.write(img_bytes)
+                            
+                        if i == 0 and idx == 0:
+                            self.current_iteration_record.chosen_design_path = evolved_rel_path
+                            self.current_iteration_record.chosen_theme_path = evolved_rel_path
+                    
+                    design_name = "latest_design.html" if i == 0 else f"latest_design_{i}.html"
+                    design_file = os.path.abspath(f"app/design/{design_name}")
+                    with open(design_file, "w", encoding="utf-8") as f:
+                        f.write(html_content)
+                    
+                    if i == 0:
+                        self.state.stitch_screen_id = new_screen_id
+                        
                 self.state.save()
                 
                 self.git.commit(f"design: generated new screen for iter {self.state.current_iteration}")
@@ -696,7 +724,8 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         "project_id": p_id, 
                         "screen_id": win["screen_id"], 
                         "html": win["html"], 
-                        "img": win["images"][0] if win["images"] else None, 
+                        "img": win["images"][0] if win["images"] else None,
+                        "images": win["images"],
                         "brief": brief,
                         "index": i
                     }
@@ -744,11 +773,20 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
         
         self._update_env_file("STITCH_PROJECT_ID", self.state.stitch_project_id)
         
+        # Clear old design files
+        for f in os.listdir("app/design"):
+            if f.endswith(".html") or f.endswith(".png"):
+                try: os.remove(os.path.join("app/design", f))
+                except: pass
+
         with open(design_file, "w", encoding="utf-8") as f:
             f.write(winning_seed["html"])
-        if winning_seed.get("img"):
-            with open(os.path.join("app", "design", "reference.png"), "wb") as f:
-                f.write(winning_seed["img"])
+        
+        if winning_seed.get("images"):
+            for img_idx, img_bytes in enumerate(winning_seed["images"]):
+                ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
+                with open(os.path.join("app", "design", ref_name), "wb") as f:
+                    f.write(img_bytes)
         
         self.current_iteration_record.design_screenshot_path = self.current_iteration_record.base_seed_paths[winning_seed["index"]]
         self.state.save()
@@ -807,11 +845,20 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         screen_id = valid_layouts[var_idx]["screen_id"]
                         winning_layout = valid_layouts[var_idx]
                         self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_variants_paths[var_idx]
+                        
+                        # Clear old design files
+                        for f in os.listdir("app/design"):
+                            if f.endswith(".html") or f.endswith(".png"):
+                                try: os.remove(os.path.join("app/design", f))
+                                except: pass
+                                
                         design_file = os.path.abspath("app/design/latest_design.html")
                         if winning_layout.get("html_content"):
                             with open(design_file, "w", encoding="utf-8") as f: f.write(winning_layout["html_content"])
                         if winning_layout.get("images"):
-                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(winning_layout["images"][0])
+                            for img_idx, img_bytes in enumerate(winning_layout["images"]):
+                                ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
+                                with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
                 except Exception as e:
                     logger.warning(f"Failed to parse LLM layout index selection: {e}")
             self.state.save()
@@ -827,14 +874,25 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 screen_id=screen_id
             )
             if screens:
-                win = screens[0]
-                design_file = os.path.abspath("app/design/latest_design.html")
-                with open(design_file, "w", encoding="utf-8") as f:
-                    f.write(win["html"])
-                if win["images"]:
-                    with open(os.path.abspath("app/design/reference.png"), "wb") as f:
-                        f.write(win["images"][0])
-                screen_id = win["screen_id"]
+                # Clear old design files to prevent stale references
+                for f in os.listdir("app/design"):
+                    if f.endswith(".html") or f.endswith(".png"):
+                        try: os.remove(os.path.join("app/design", f))
+                        except: pass
+
+                for i, win in enumerate(screens):
+                    design_name = "latest_design.html" if i == 0 else f"latest_design_{i}.html"
+                    design_file = os.path.abspath(f"app/design/{design_name}")
+                    with open(design_file, "w", encoding="utf-8") as f:
+                        f.write(win["html"])
+                    
+                    for idx, img_bytes in enumerate(win["images"]):
+                        ref_name = "reference.png" if i == 0 and idx == 0 else f"reference_{i}_{idx}.png"
+                        with open(os.path.abspath(f"app/design/{ref_name}"), "wb") as f:
+                            f.write(img_bytes)
+                            
+                    if i == 0:
+                        screen_id = win["screen_id"]
 
         self.state.stitch_screen_id = screen_id
         self.state.save()
@@ -900,11 +958,20 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         var_idx = best_t_idx - 1
                         chosen_t = valid_themes[var_idx]
                         self.current_iteration_record.chosen_theme_path = self.current_iteration_record.theme_variants_paths[var_idx]
+                        
+                        # Clear old design files
+                        for f in os.listdir("app/design"):
+                            if f.endswith(".html") or f.endswith(".png"):
+                                try: os.remove(os.path.join("app/design", f))
+                                except: pass
+                                
                         design_file = os.path.abspath("app/design/latest_design.html")
                         if chosen_t.get("html_content"):
                             with open(design_file, "w", encoding="utf-8") as f: f.write(chosen_t["html_content"])
                         if chosen_t.get("images"):
-                            with open(os.path.join("app", "design", "reference.png"), "wb") as f: f.write(chosen_t["images"][0])
+                            for img_idx, img_bytes in enumerate(chosen_t["images"]):
+                                ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
+                                with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
                 except Exception as e:
                     logger.warning(f"Failed to parse LLM theme index selection: {e}")
             self.state.save()
