@@ -159,14 +159,11 @@ class StitchClient(AgentProxy):
                 try:
                     inner_json = json.loads(raw_text)
                     
-                    if method == "edit_screens":
-                        screens = inner_json if isinstance(inner_json, list) else [inner_json]
-                    else:
-                        output_components = inner_json.get("outputComponents", [{}])
-                        if "text" in output_components[0] and "design" not in output_components[0]:
-                            stitch_response = output_components[0]["text"]
-                            raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
-                        screens = output_components[0].get("design", {}).get("screens", [])
+                    output_components = inner_json.get("outputComponents", [{}])
+                    if "text" in output_components[0] and "design" not in output_components[0]:
+                        stitch_response = output_components[0]["text"]
+                        raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
+                    screens = output_components[0].get("design", {}).get("screens", [])
                     
                     for screen in screens:
                         screen_data = {
