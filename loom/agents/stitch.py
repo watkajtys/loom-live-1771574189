@@ -237,9 +237,16 @@ class StitchClient(AgentProxy):
         for block in content_blocks:
             if block.get("type") == "text":
                 raw_text = block.get("text", "")
+                if "The service is currently unavailable" in raw_text:
+                     raise Exception("Stitch Service Unavailable")
                 try:
                     inner_json = json.loads(raw_text)
-                    screens = inner_json.get("outputComponents", [{}])[0].get("design", {}).get("screens", [])
+                    output_comps = inner_json.get("outputComponents", [{}])
+                    if "text" in output_comps[0] and "design" not in output_comps[0]:
+                        stitch_response = output_comps[0]["text"]
+                        raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
+                    
+                    screens = output_comps[0].get("design", {}).get("screens", [])
                     
                     for idx, screen in enumerate(screens):
                         variant_data = {

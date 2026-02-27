@@ -61,6 +61,15 @@ class Overseer:
         self.app_screenshot_path = None
         self.patch_dest_rel = None
         
+        # Long-term memory
+        self.lab_memory = {}
+        if os.path.exists("loom_memory.json"):
+            try:
+                with open("loom_memory.json", "r", encoding="utf-8") as f:
+                    self.lab_memory = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load loom_memory.json: {e}")
+        
         # Ensure artifacts directory exists
         os.makedirs("viewer/public/artifacts", exist_ok=True)
         
@@ -499,6 +508,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 past_history = "\n### LAB ARCHIVE (PREVIOUS PROTOTYPES)\nDo not repeat these specific product niches:\n"
                 for h in self.state.history[-10:]:
                     past_history += f"- {h.goal[:100]}...\n"
+            
+            # Inject long-term memory projects if they exist
+            if self.lab_memory.get("past_projects"):
+                if not past_history:
+                    past_history = "\n### LAB ARCHIVE (PREVIOUS PROTOTYPES)\nDo not repeat these specific product niches:\n"
+                for p in self.lab_memory["past_projects"]:
+                    past_history += f"- {p.get('name')}: {p.get('niche')}\n"
 
             memory_context = ""
             if self.state.repo_memory.get("learnings"):
@@ -531,6 +547,12 @@ CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS SOUL.
 
 [SELECTED CONCEPT]
 A detailed paragraph describing the app's architecture and the emotional UX flow. 
+
+[APP_META]
+Name: [A beautiful, 1-2 word name for the product]
+Palette: [A sensory description of the colors]
+Typography: [The vibe of the font]
+
 [TARGET_ROUTE]
 The URL path where the core experience will live (e.g. /haven)
 
@@ -548,6 +570,13 @@ A simple, step-by-step description of how a person would use this to solve their
             else:
                 self.state.inspiration_goal = raw_response.strip().split("\n")[-1]
 
+            if "[APP_META]" in raw_response:
+                meta_part = raw_response.split("[APP_META]")[1]
+                self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
+                # Ensure app directory exists before writing meta
+                os.makedirs("app", exist_ok=True)
+                with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
+
             if "[TARGET_ROUTE]" in raw_response:
                 self.current_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
                 
@@ -561,6 +590,9 @@ A simple, step-by-step description of how a person would use this to solve their
                 self.test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
                 
             logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.requires_design})")
+            
+            # Persist this new project to the long-term archive
+            self._save_to_lab_memory()
 
         # Record current iteration parameters immediately
         self.state.current_iteration += 1
@@ -580,6 +612,42 @@ A simple, step-by-step description of how a person would use this to solve their
         self.state.history.append(self.current_iteration_record)
         self.state.save()
         return branch_name
+
+    def _save_to_lab_memory(self):
+        """Saves the current inspiration goal to loom_memory.json if it's new."""
+        try:
+            name = "Unknown"
+            niche = self.state.inspiration_goal[:200]
+            
+            # Try to extract a name if the LLM provided one (optional based on prompt evolution)
+            if "[APP_META]" in (self.current_brainstorm_output or ""):
+                meta = self.current_brainstorm_output.split("[APP_META]")[1].split("[")[0].strip()
+                name = meta.split("\n")[0].replace("Name:", "").strip()
+
+            new_project = {
+                "name": name,
+                "niche": niche,
+                "pitch": self.state.inspiration_goal,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            # Load fresh copy to avoid overwrite races
+            if os.path.exists("loom_memory.json"):
+                with open("loom_memory.json", "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                data = {"archive_count": 0, "technical_learnings": [], "past_projects": []}
+            
+            # Avoid duplicates
+            if not any(p.get("pitch") == new_project["pitch"] for p in data.get("past_projects", [])):
+                data.setdefault("past_projects", []).append(new_project)
+                data["archive_count"] = len(data["past_projects"])
+                
+                with open("loom_memory.json", "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                logger.info(f"Saved project '{name}' to long-term lab memory.")
+        except Exception as e:
+            logger.warning(f"Failed to save to loom_memory.json: {e}")
 
     def _step_design(self):
         if not self.requires_design:
@@ -873,7 +941,8 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             self.state.save()
 
         # 4. SINGLE-CALL THEME PASS (5 Variants)
-        if not self.state.app_meta:
+        # Always run theme exploration for Iteration 1 to establish the brand
+        if self.state.current_iteration == 1:
             self._run_theme_pass(screen_id, count=5)
         else:
             logger.info("Applying existing App Meta theme to new layout...")
