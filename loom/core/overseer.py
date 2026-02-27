@@ -606,10 +606,13 @@ A simple, step-by-step description of how a person would use this to solve their
             
             if screens:
                 # Clear old design files to prevent stale references
-                for f in os.listdir("app/design"):
-                    if f.endswith(".html") or f.endswith(".png"):
-                        try: os.remove(os.path.join("app/design", f))
-                        except: pass
+                if os.path.exists("app/design"):
+                    for f in os.listdir("app/design"):
+                        if f.endswith(".html") or f.endswith(".png"):
+                            try: os.remove(os.path.join("app/design", f))
+                            except: pass
+                else:
+                    os.makedirs("app/design", exist_ok=True)
 
                 ts = int(time.time())
                 for i, screen in enumerate(screens):
@@ -774,10 +777,13 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
         self._update_env_file("STITCH_PROJECT_ID", self.state.stitch_project_id)
         
         # Clear old design files
-        for f in os.listdir("app/design"):
-            if f.endswith(".html") or f.endswith(".png"):
-                try: os.remove(os.path.join("app/design", f))
-                except: pass
+        if os.path.exists("app/design"):
+            for f in os.listdir("app/design"):
+                if f.endswith(".html") or f.endswith(".png"):
+                    try: os.remove(os.path.join("app/design", f))
+                    except: pass
+        else:
+            os.makedirs("app/design", exist_ok=True)
 
         with open(design_file, "w", encoding="utf-8") as f:
             f.write(winning_seed["html"])
@@ -847,10 +853,13 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_variants_paths[var_idx]
                         
                         # Clear old design files
-                        for f in os.listdir("app/design"):
-                            if f.endswith(".html") or f.endswith(".png"):
-                                try: os.remove(os.path.join("app/design", f))
-                                except: pass
+                        if os.path.exists("app/design"):
+                            for f in os.listdir("app/design"):
+                                if f.endswith(".html") or f.endswith(".png"):
+                                    try: os.remove(os.path.join("app/design", f))
+                                    except: pass
+                        else:
+                            os.makedirs("app/design", exist_ok=True)
                                 
                         design_file = os.path.abspath("app/design/latest_design.html")
                         if winning_layout.get("html_content"):
@@ -875,10 +884,13 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             )
             if screens:
                 # Clear old design files to prevent stale references
-                for f in os.listdir("app/design"):
-                    if f.endswith(".html") or f.endswith(".png"):
-                        try: os.remove(os.path.join("app/design", f))
-                        except: pass
+                if os.path.exists("app/design"):
+                    for f in os.listdir("app/design"):
+                        if f.endswith(".html") or f.endswith(".png"):
+                            try: os.remove(os.path.join("app/design", f))
+                            except: pass
+                else:
+                    os.makedirs("app/design", exist_ok=True)
 
                 for i, win in enumerate(screens):
                     design_name = "latest_design.html" if i == 0 else f"latest_design_{i}.html"
@@ -960,10 +972,13 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         self.current_iteration_record.chosen_theme_path = self.current_iteration_record.theme_variants_paths[var_idx]
                         
                         # Clear old design files
-                        for f in os.listdir("app/design"):
-                            if f.endswith(".html") or f.endswith(".png"):
-                                try: os.remove(os.path.join("app/design", f))
-                                except: pass
+                        if os.path.exists("app/design"):
+                            for f in os.listdir("app/design"):
+                                if f.endswith(".html") or f.endswith(".png"):
+                                    try: os.remove(os.path.join("app/design", f))
+                                    except: pass
+                        else:
+                            os.makedirs("app/design", exist_ok=True)
                                 
                         design_file = os.path.abspath("app/design/latest_design.html")
                         if chosen_t.get("html_content"):
