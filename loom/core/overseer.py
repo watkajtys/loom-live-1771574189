@@ -429,6 +429,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
         # 7. Git Init & Commit
         try:
+            self.git._run(["git", "init"], cwd="app")
             self.git._run(["git", "add", "."], cwd="app")
             self.git.commit("chore: initial scaffold")
             logger.info("[bold green]Scaffolding complete.[/bold green]", extra={"markup": True})
