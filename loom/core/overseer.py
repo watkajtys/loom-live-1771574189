@@ -493,34 +493,35 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     def _step_inspiration(self) -> str:
         self.state.current_phase = LoomPhase.INSPIRATION.value
         if not self.state.inspiration_goal:
-            self.state.current_status = "Scanning market gaps for new Micro-SaaS opportunities..."
-            self.state.save()
-            logger.info("Overseer is conducting a Micro-SaaS product discovery pass...")
-            
-            import random
-            entropy_seed = random.getrandbits(64)
+            if not self.state.app_meta:
+                self.state.current_status = "Scanning market gaps for new Micro-SaaS opportunities..."
+                self.state.save()
+                logger.info("Overseer is conducting a Micro-SaaS product discovery pass...")
+                
+                import random
+                entropy_seed = random.getrandbits(64)
 
-            past_history = ""
-            if self.state.history:
-                past_history = "\n### LAB ARCHIVE (PREVIOUS PROTOTYPES)\nDo not repeat these specific product niches:\n"
-                for h in self.state.history[-10:]:
-                    past_history += f"- {h.goal[:100]}...\n"
-            
-            # Inject long-term memory projects if they exist
-            if self.lab_memory.get("past_projects"):
-                if not past_history:
+                past_history = ""
+                if self.state.history:
                     past_history = "\n### LAB ARCHIVE (PREVIOUS PROTOTYPES)\nDo not repeat these specific product niches:\n"
-                for p in self.lab_memory["past_projects"]:
-                    past_history += f"- {p.get('name')}: {p.get('niche')}\n"
+                    for h in self.state.history[-10:]:
+                        past_history += f"- {h.goal[:100]}...\n"
+                
+                # Inject long-term memory projects if they exist
+                if self.lab_memory.get("past_projects"):
+                    if not past_history:
+                        past_history = "\n### LAB ARCHIVE (PREVIOUS PROTOTYPES)\nDo not repeat these specific product niches:\n"
+                    for p in self.lab_memory["past_projects"]:
+                        past_history += f"- {p.get('name')}: {p.get('niche')}\n"
 
-            memory_context = ""
-            if self.state.repo_memory.get("learnings"):
-                memory_context = "\n### LAB TECHNICAL NOTES\n"
-                for l in self.state.repo_memory["learnings"][-3:]:
-                    status = "Success" if l['success'] else "Failure"
-                    memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
-            
-            prompt = f"""
+                memory_context = ""
+                if self.state.repo_memory.get("learnings"):
+                    memory_context = "\n### LAB TECHNICAL NOTES\n"
+                    for l in self.state.repo_memory["learnings"][-3:]:
+                        status = "Success" if l['success'] else "Failure"
+                        memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
+                
+                prompt = f"""
 You are the Creative Director of a Boutique Consumer Product Studio. 
 Your goal is to identify a small, recurring "Human Annoyance" in daily life and invent a beautiful, single-purpose web application (Micro-SaaS) to solve it.
 
@@ -559,37 +560,116 @@ TRUE or FALSE
 [TEST_SCENARIO]
 A simple, step-by-step description of how a person would use this to solve their annoyance.
 """
-            raw_response = self.think(prompt, temperature=0.9)
-            logger.info(f"Studio Brainstorming Output:\n{raw_response}")
-            self.current_brainstorm_output = raw_response            
-            if "[SELECTED CONCEPT]" in raw_response:
-                self.state.inspiration_goal = raw_response.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
-            else:
-                self.state.inspiration_goal = raw_response.strip().split("\n")[-1]
+                raw_response = self.think(prompt, temperature=0.9)
+                logger.info(f"Studio Brainstorming Output:\n{raw_response}")
+                self.current_brainstorm_output = raw_response            
+                if "[SELECTED CONCEPT]" in raw_response:
+                    self.state.inspiration_goal = raw_response.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
+                else:
+                    self.state.inspiration_goal = raw_response.strip().split("\n")[-1]
 
-            if "[APP_META]" in raw_response:
-                meta_part = raw_response.split("[APP_META]")[1]
-                self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
-                # Ensure app directory exists before writing meta
-                os.makedirs("app", exist_ok=True)
-                with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
+                if "[APP_META]" in raw_response:
+                    meta_part = raw_response.split("[APP_META]")[1]
+                    self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
+                    # Ensure app directory exists before writing meta
+                    os.makedirs("app", exist_ok=True)
+                    with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
 
-            if "[TARGET_ROUTE]" in raw_response:
-                self.state.inspiration_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
-                
-            self.state.inspiration_requires_design = True
-            if "[REQUIRES_DESIGN]" in raw_response:
-                req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
-                if "FALSE" in req_design_str:
-                    self.state.inspiration_requires_design = False
+                if "[TARGET_ROUTE]" in raw_response:
+                    self.state.inspiration_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
                     
-            if "[TEST_SCENARIO]" in raw_response:
-                self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
+                self.state.inspiration_requires_design = True
+                if "[REQUIRES_DESIGN]" in raw_response:
+                    req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                    if "FALSE" in req_design_str:
+                        self.state.inspiration_requires_design = False
+                        
+                if "[TEST_SCENARIO]" in raw_response:
+                    self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
+                    
+                logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.state.inspiration_requires_design})")
                 
-            logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.state.inspiration_requires_design})")
-            
-            # Persist this new project to the long-term archive
-            self._save_to_lab_memory()
+                # Persist this new project to the long-term archive
+                self._save_to_lab_memory()
+            else:
+                self.state.current_status = "Evaluating product roadmap for next phase..."
+                self.state.save()
+                logger.info("Overseer is acting as Product Manager...")
+
+                try: src_tree = subprocess.check_output(["git", "ls-tree", "-r", "--name-only", "HEAD", "src/"], cwd="app", text=True)
+                except Exception as e:
+                    logger.warning(f"Failed to read src/ tree: {e}")
+                    src_tree = "src/ tree unavailable."
+                
+                memory_context = ""
+                if self.state.repo_memory.get("learnings"):
+                    memory_context = "\nPast Learnings:\n"
+                    for l in self.state.repo_memory["learnings"][-3:]:
+                        status = "Success" if l['success'] else "Failure"
+                        memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
+
+                last_goal = self.state.history[-1].goal if self.state.history else "Initial Scaffold"
+                last_route = self.state.history[-1].target_route if self.state.history else "/"
+
+                next_prompt = f"""
+We just successfully implemented: '{last_goal}' at route '{last_route}'. 
+App Identity: {self.state.app_meta}
+Current Product Phase: {self.state.product_phase}
+{memory_context}
+
+Current Codebase Files:
+```text
+{src_tree}
+```
+
+You are a strict, product-minded General Manager overseeing this app. You do NOT invent random features. You build a real, viable product using a strict maturity playbook:
+
+THE PLAYBOOK:
+- Phase 1: Core Loop MVP (Focus: The single primary action must work flawlessly)
+- Phase 2: State & Retention (Focus: Saving data, localStorage, user memory, empty states)
+- Phase 3: Vibe & Polish (Focus: Typography, spacing, framer-motion animations, responsive design)
+- Phase 4: Monetization & Growth (Focus: Stripe paywalls, pricing pages, upgrade modals)
+
+YOUR TASK:
+1. Look at the Current Codebase Files and the feature we just shipped. 
+2. Determine if the app is ready to graduate to the next Phase in the playbook, or if it needs to stay in the current Phase to fix gaps.
+3. Decide the ONE most critical next step. 
+
+OUTPUT FORMAT:
+[NEW_PHASE]
+(e.g., Phase 2: State & Retention)
+
+[ROADMAP_UPDATE]
+A brief sentence explaining why you chose this phase and what the current status is.
+
+[SELECTED CONCEPT]
+The specific engineering/design goal for the next iteration based on the Phase.
+
+[TARGET_ROUTE]
+The URL path (e.g. /settings)
+
+[REQUIRES_DESIGN]
+TRUE or FALSE (e.g., wiring up localStorage is FALSE, adding a Pricing page is TRUE)
+
+[TEST_SCENARIO]
+A step-by-step playwright assertion to prove it works.
+"""
+                next_idea = self.think(next_prompt, self.app_screenshot, temperature=0.8)
+                logger.info(f"PM Roadmap Review Output:\n{next_idea}")
+                self.current_brainstorm_output = next_idea
+                
+                if "[NEW_PHASE]" in next_idea:
+                    self.state.product_phase = next_idea.split("[NEW_PHASE]")[1].split("[")[0].strip()
+                if "[ROADMAP_UPDATE]" in next_idea:
+                    self.state.product_roadmap = next_idea.split("[ROADMAP_UPDATE]")[1].split("[")[0].strip()
+                if "[SELECTED CONCEPT]" in next_idea:
+                    self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
+                if "[TARGET_ROUTE]" in next_idea:
+                    self.state.inspiration_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                if "[REQUIRES_DESIGN]" in next_idea:
+                    self.state.inspiration_requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                if "[TEST_SCENARIO]" in next_idea:
+                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
 
         # Record current iteration parameters immediately
         self.state.current_iteration += 1
@@ -1294,85 +1374,13 @@ Based on this outcome, provide a brief summary of what we learned. Format as a s
                 self.git._run(["git", "merge", branch], cwd="app")
                 self.git.push_branch("main")
                 
-                self.state.current_status = "Brainstorming next iteration..."
-                self.state.save()
+                self.state.current_status = "Merge successful. Preparing for next loop..."
                 
-                logger.info("Brainstorming next addition...")
-                try: src_tree = subprocess.check_output(["git", "ls-tree", "-r", "--name-only", "HEAD", "src/"], cwd="app", text=True)
-                except Exception as e:
-                    logger.warning(f"Failed to read src/ tree: {e}")
-                    src_tree = "src/ tree unavailable."
-                
-                memory_context = ""
-                if self.state.repo_memory.get("learnings"):
-                    memory_context = "\nPast Learnings:\n"
-                    for l in self.state.repo_memory["learnings"][-3:]:
-                        status = "Success" if l['success'] else "Failure"
-                        memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
-
-                next_prompt = f"""
-We just successfully implemented: '{self.state.inspiration_goal}' at route '{self.state.inspiration_target_route}'. 
-App Identity: {self.state.app_meta}
-Current Product Phase: {self.state.product_phase}
-{memory_context}
-
-Current Codebase Files:
-```text
-{src_tree}
-```
-
-You are a strict, product-minded General Manager overseeing this app. You do NOT invent random features. You build a real, viable product using a strict maturity playbook:
-
-THE PLAYBOOK:
-- Phase 1: Core Loop MVP (Focus: The single primary action must work flawlessly)
-- Phase 2: State & Retention (Focus: Saving data, localStorage, user memory, empty states)
-- Phase 3: Vibe & Polish (Focus: Typography, spacing, framer-motion animations, responsive design)
-- Phase 4: Monetization & Growth (Focus: Stripe paywalls, pricing pages, upgrade modals)
-
-YOUR TASK:
-1. Look at the Current Codebase Files and the feature we just shipped. 
-2. Determine if the app is ready to graduate to the next Phase in the playbook, or if it needs to stay in the current Phase to fix gaps.
-3. Decide the ONE most critical next step. 
-
-OUTPUT FORMAT:
-[NEW_PHASE]
-(e.g., Phase 2: State & Retention)
-
-[ROADMAP_UPDATE]
-A brief sentence explaining why you chose this phase and what the current status is.
-
-[SELECTED CONCEPT]
-The specific engineering/design goal for the next iteration based on the Phase.
-
-[TARGET_ROUTE]
-The URL path (e.g. /settings)
-
-[REQUIRES_DESIGN]
-TRUE or FALSE (e.g., wiring up localStorage is FALSE, adding a Pricing page is TRUE)
-
-[TEST_SCENARIO]
-A step-by-step playwright assertion to prove it works.
-"""
-                next_idea = self.think(next_prompt, self.app_screenshot, temperature=0.8)
-                logger.info(f"PM Roadmap Review Output:\n{next_idea}")
-                self.current_brainstorm_output = next_idea
-                
-                if "[NEW_PHASE]" in next_idea:
-                    self.state.product_phase = next_idea.split("[NEW_PHASE]")[1].split("[")[0].strip()
-                if "[ROADMAP_UPDATE]" in next_idea:
-                    self.state.product_roadmap = next_idea.split("[ROADMAP_UPDATE]")[1].split("[")[0].strip()
-                if "[SELECTED CONCEPT]" in next_idea:
-                    self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
-                if "[TARGET_ROUTE]" in next_idea:
-                    self.state.inspiration_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
-                if "[REQUIRES_DESIGN]" in next_idea:
-                    self.state.inspiration_requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
-                if "[TEST_SCENARIO]" in next_idea:
-                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
-                if "[APP_META]" in next_idea:
-                    meta_part = next_idea.split("[APP_META]")[1]
-                    self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
-                    with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
+                # Clear the inspiration goal so the next loop triggers _step_inspiration again
+                self.state.inspiration_goal = ""
+                self.state.inspiration_target_route = "/"
+                self.state.inspiration_test_scenario = ""
+                self.state.inspiration_requires_design = True
                 
                 self.state.save()
             except Exception as e:
