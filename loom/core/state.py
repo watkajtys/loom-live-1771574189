@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import threading
+import time
 from typing import List, Optional
 from pathlib import Path
 from pydantic import BaseModel
@@ -69,7 +70,18 @@ class ConductorState(BaseModel):
             try:
                 with open(tmp_file, "w", encoding="utf-8") as f:
                     f.write(self.model_dump_json(indent=2))
-                os.replace(tmp_file, STATE_FILE)
+                
+                # Windows specific: retry replace if file is locked
+                max_retries = 20
+                for i in range(max_retries):
+                    try:
+                        os.replace(tmp_file, STATE_FILE)
+                        break
+                    except OSError as e:
+                        if i == max_retries - 1:
+                            raise e
+                        # Gradually increase sleep time
+                        time.sleep(0.05 * (i + 1))
             except Exception as e:
                 # Using print instead of logger to prevent infinite recursion with StateLogHandler
                 print(f"Warning: Failed to save state to disk (likely locked by viewer): {e}")
@@ -94,11 +106,17 @@ class ConductorState(BaseModel):
             if _global_state is not None:
                 return _global_state
             if STATE_FILE.exists():
-                try:
-                    with open(STATE_FILE, "r", encoding="utf-8") as f:
-                        _global_state = cls.model_validate_json(f.read())
-                        return _global_state
-                except Exception as e:
-                    print(f"Warning: Failed to load state: {e}. Starting fresh.")
+                # Retry load if file is temporarily locked (e.g. by save process rename)
+                max_retries = 10
+                for i in range(max_retries):
+                    try:
+                        with open(STATE_FILE, "r", encoding="utf-8") as f:
+                            _global_state = cls.model_validate_json(f.read())
+                            return _global_state
+                    except (OSError, Exception) as e:
+                        if i == max_retries - 1:
+                            print(f"Warning: Failed to load state after {max_retries} attempts: {e}. Starting fresh.")
+                            break
+                        time.sleep(0.05 * (i + 1))
             _global_state = cls()
             return _global_state

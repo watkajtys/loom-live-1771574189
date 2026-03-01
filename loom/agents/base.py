@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import os
 from typing import List
 
 logger = logging.getLogger("loom")
@@ -14,6 +15,7 @@ class AgentProxy:
                 capture_output=True, 
                 text=True, 
                 check=True,
+                shell=(os.name == 'nt'),
                 timeout=300 # 5 minute timeout
             )
             return result.stdout.strip()

@@ -1212,8 +1212,8 @@ Feedback:
 
     def _run_build(self):
         try:
-            subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd="app", check=True, capture_output=True, text=True, shell=True)
-            subprocess.run(["npm", "run", "build"], cwd="app", check=True, capture_output=True, text=True, shell=True)
+            subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd="app", check=True, capture_output=True, text=True, shell=(os.name == 'nt'))
+            subprocess.run(["npm", "run", "build"], cwd="app", check=True, capture_output=True, text=True, shell=(os.name == 'nt'))
             return True, ""
         except subprocess.CalledProcessError as e: return False, e.stderr or e.stdout
         except Exception as e: return False, str(e)
@@ -1223,8 +1223,8 @@ Feedback:
         self.phoenix.wait_for_ready()
         try:
             # Install playwright browsers if not present
-            subprocess.run(["npx", "playwright", "install", "chromium"], cwd="app", check=True, capture_output=True, text=True, shell=True)
-            result = subprocess.run(["npx", "playwright", "test"], cwd="app", capture_output=True, text=True, shell=True)
+            subprocess.run(["npx", "playwright", "install", "chromium"], cwd="app", check=True, capture_output=True, text=True, shell=(os.name == 'nt'))
+            result = subprocess.run(["npx", "playwright", "test"], cwd="app", capture_output=True, text=True, shell=(os.name == 'nt'))
             
             # Check for Evidence
             if os.path.exists("app/evidence.png"):

@@ -32,13 +32,13 @@ class PhoenixServer:
         import os
         logger.info("Spawning Phoenix Server (Vite)...")
         try:
-            # Using shell=True for Windows compatibility with npm
+            # Using shell=True only on Windows for compatibility with npm.cmd
             self.process = subprocess.Popen(
                 ["npm", "run", "dev"], 
                 cwd="app",
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                shell=True
+                shell=(os.name == 'nt')
             )
         except Exception as e:
             logger.error(f"Failed to spawn Vite: {e}")

@@ -144,7 +144,7 @@ class StitchClient(AgentProxy):
                 "deviceType": "DESKTOP"
             }
             
-        logger.info(f"Calling Stitch API (method={method}, timeout=300s)...")
+        logger.info(f"Calling Stitch API (method={method}, timeout=600s)...")
         data = self._call_mcp(method, arguments, project_id)
         
         result = data.get("result", {})

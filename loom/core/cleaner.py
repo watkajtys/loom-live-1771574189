@@ -26,29 +26,29 @@ def clean_slate():
     try:
         if os.path.exists("app/.git"):
             logger.info("Resetting app repository to origin/main...")
-            subprocess.run(["git", "reset", "--hard"], cwd="app", check=True, stdout=subprocess.DEVNULL)
-            subprocess.run(["git", "clean", "-xfd"], cwd="app", check=True, stdout=subprocess.DEVNULL)
-            subprocess.run(["git", "checkout", "main"], cwd="app", check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["git", "reset", "--hard"], cwd="app", check=True, stdout=subprocess.DEVNULL, shell=(os.name == 'nt'))
+            subprocess.run(["git", "clean", "-xfd"], cwd="app", check=True, stdout=subprocess.DEVNULL, shell=(os.name == 'nt'))
+            subprocess.run(["git", "checkout", "main"], cwd="app", check=True, stdout=subprocess.DEVNULL, shell=(os.name == 'nt'))
             
             # Delete any left-over iter- branches
             try:
-                branches = subprocess.check_output(["git", "branch"], cwd="app", text=True)
+                branches = subprocess.check_output(["git", "branch"], cwd="app", text=True, shell=(os.name == 'nt'))
                 for branch in branches.splitlines():
                     branch_name = branch.strip().replace("* ", "")
                     if branch_name.startswith("iter-"):
-                        subprocess.run(["git", "branch", "-D", branch_name], cwd="app", check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(["git", "branch", "-D", branch_name], cwd="app", check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=(os.name == 'nt'))
             except Exception as e:
                 logger.warning(f"Error deleting old branches: {e}")
             
             # If origin exists, hard reset to it. If it fails, that's okay (e.g. no origin yet).
             try:
-                subprocess.run(["git", "reset", "--hard", "origin/main"], cwd="app", check=True, stdout=subprocess.DEVNULL)
+                subprocess.run(["git", "reset", "--hard", "origin/main"], cwd="app", check=True, stdout=subprocess.DEVNULL, shell=(os.name == 'nt'))
             except subprocess.CalledProcessError:
                 pass
             
             # Attempt to remove any origin remote so ensure_remote() creates a fresh one
             try:
-                subprocess.run(["git", "remote", "remove", "origin"], cwd="app", check=True, stdout=subprocess.DEVNULL)
+                subprocess.run(["git", "remote", "remove", "origin"], cwd="app", check=True, stdout=subprocess.DEVNULL, shell=(os.name == 'nt'))
             except subprocess.CalledProcessError:
                 pass
     except Exception as e:
