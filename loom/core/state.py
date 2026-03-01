@@ -55,6 +55,9 @@ class ConductorState(BaseModel):
     current_iteration: int = 0
     active_branch: str = "main"
     inspiration_goal: str = ""
+    inspiration_target_route: str = "/"
+    inspiration_requires_design: bool = True
+    inspiration_test_scenario: str = ""
     history: List[LoopIteration] = []
     stitch_project_id: Optional[str] = None
     stitch_screen_id: Optional[str] = None

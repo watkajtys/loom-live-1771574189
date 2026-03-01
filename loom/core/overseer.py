@@ -51,10 +51,7 @@ class Overseer:
         
         # Iteration-specific state
         self.current_iteration_record = None
-        self.current_target_route = "/"
-        self.requires_design = True
         self.current_brainstorm_output = None
-        self.test_scenario = ""
         self.happiness_score = 0
         self.last_critique = ""
         self.app_screenshot = None
@@ -467,8 +464,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         
         # Resume state if history exists
         if self.state.history:
-            self.current_target_route = self.state.history[-1].target_route
-            self.requires_design = self.state.history[-1].requires_design
+            self.state.inspiration_target_route = self.state.history[-1].target_route
+            self.state.inspiration_requires_design = self.state.history[-1].requires_design
         
         while True:
             try:
@@ -578,18 +575,18 @@ A simple, step-by-step description of how a person would use this to solve their
                 with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
 
             if "[TARGET_ROUTE]" in raw_response:
-                self.current_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                self.state.inspiration_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
                 
-            self.requires_design = True
+            self.state.inspiration_requires_design = True
             if "[REQUIRES_DESIGN]" in raw_response:
                 req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                 if "FALSE" in req_design_str:
-                    self.requires_design = False
+                    self.state.inspiration_requires_design = False
                     
             if "[TEST_SCENARIO]" in raw_response:
-                self.test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
+                self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
                 
-            logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.requires_design})")
+            logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.state.inspiration_requires_design})")
             
             # Persist this new project to the long-term archive
             self._save_to_lab_memory()
@@ -603,9 +600,9 @@ A simple, step-by-step description of how a person would use this to solve their
             id=self.state.current_iteration,
             timestamp=str(datetime.now()),
             goal=self.state.inspiration_goal,
-            target_route=self.current_target_route,
-            requires_design=self.requires_design,
-            test_scenario=self.test_scenario,
+            target_route=self.state.inspiration_target_route,
+            requires_design=self.state.inspiration_requires_design,
+            test_scenario=self.state.inspiration_test_scenario,
             negative_history=[h.goal for h in self.state.history[-5:] if h.goal],
             brainstorming_output=self.current_brainstorm_output
         )
@@ -650,7 +647,7 @@ A simple, step-by-step description of how a person would use this to solve their
             logger.warning(f"Failed to save to loom_memory.json: {e}")
 
     def _step_design(self):
-        if not self.requires_design:
+        if not self.state.inspiration_requires_design:
             logger.info("Skipping Stitch design phase as REQUIRES_DESIGN is False.")
             return
 
@@ -663,7 +660,7 @@ A simple, step-by-step description of how a person would use this to solve their
             self.state.current_status = f"Designing new feature in existing project..."
             self.state.save()
             
-            prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.current_target_route}. Please design the UI for this feature. Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
+            prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.state.inspiration_target_route}. Please design the UI for this feature. Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
             
             screen_id = getattr(self.state, 'stitch_screen_id', None)
             screens = self.stitch.generate_or_edit_screen(
@@ -762,7 +759,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
         self.state.save()
         base_variants = [None] * 5
         self.current_iteration_record.base_seed_paths = [None] * 5
-        design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.current_target_route}"
+        design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.state.inspiration_target_route}"
         
         import concurrent.futures
         
@@ -1105,31 +1102,31 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
 
         if attempt == 1:
-            if self.requires_design:
+            if self.state.inspiration_requires_design:
                 return f"""
 Implement the design for '{self.state.inspiration_goal}'.
 App Identity: {self.state.app_meta}
-Target Route: {self.current_target_route}
+Target Route: {self.state.inspiration_target_route}
 {memory_context}
 
 The design files are in app/design. 
 CRITICAL RULES:
 1. Integrate this new feature into the existing application natively using the established design system (Tailwind classes, layout, components).
-2. The target flow/location is: '{self.current_target_route}'. If this requires a new page, set up React Router without breaking existing pages. If it is a modal/overlay, integrate it cleanly into the current view.
-3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).4. You MUST write a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.test_scenario}".
+2. The target flow/location is: '{self.state.inspiration_target_route}'. If this requires a new page, set up React Router without breaking existing pages. If it is a modal/overlay, integrate it cleanly into the current view.
+3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).4. You MUST write a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}".
 5. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
 """
             else:
                 return f"""
 Implement the following architectural/logic feature: '{self.state.inspiration_goal}'.
 App Identity: {self.state.app_meta}
-Target Route: {self.current_target_route}
+Target Route: {self.state.inspiration_target_route}
 {memory_context}
 
 CRITICAL RULES:
 1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout. 
 2. Focus purely on the underlying React logic, state management, or architecture as requested.
-3. You MUST write or update a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.test_scenario}".
+3. You MUST write or update a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}".
 4. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`.
 """
         else:
@@ -1140,7 +1137,7 @@ CRITICAL RULES:
             
             return f"""Refine the implementation. 
 Meta: {self.state.app_meta}. 
-Route: {self.current_target_route}. 
+Route: {self.state.inspiration_target_route}. 
 {memory_context}
 
 CRITICAL RULES:
@@ -1193,8 +1190,8 @@ Feedback:
                 else:
                     logger.info("Tests passed.")
                     # Vision check
-                    if self.requires_design:
-                        self.happiness_score, self.last_critique, self.app_screenshot = self.evaluate_happiness(target_route=self.current_target_route)
+                    if self.state.inspiration_requires_design:
+                        self.happiness_score, self.last_critique, self.app_screenshot = self.evaluate_happiness(target_route=self.state.inspiration_target_route)
                     else:
                         self.happiness_score, self.last_critique = 10, "Logic update successful."
                     
@@ -1314,7 +1311,7 @@ Based on this outcome, provide a brief summary of what we learned. Format as a s
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
 
                 next_prompt = f"""
-We just successfully implemented: '{self.state.inspiration_goal}' at route '{self.current_target_route}'. 
+We just successfully implemented: '{self.state.inspiration_goal}' at route '{self.state.inspiration_target_route}'. 
 App Identity: {self.state.app_meta}
 Current Product Phase: {self.state.product_phase}
 {memory_context}
@@ -1367,11 +1364,11 @@ A step-by-step playwright assertion to prove it works.
                 if "[SELECTED CONCEPT]" in next_idea:
                     self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
                 if "[TARGET_ROUTE]" in next_idea:
-                    self.current_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                    self.state.inspiration_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
                 if "[REQUIRES_DESIGN]" in next_idea:
-                    self.requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                    self.state.inspiration_requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                 if "[TEST_SCENARIO]" in next_idea:
-                    self.test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
+                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
                 if "[APP_META]" in next_idea:
                     meta_part = next_idea.split("[APP_META]")[1]
                     self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
@@ -1394,9 +1391,14 @@ A step-by-step playwright assertion to prove it works.
                 self.state.stitch_project_id = None
                 self.state.stitch_screen_id = None
                 self.state.app_meta = ""
+                self.state.product_phase = "Phase 1: Core Loop MVP"
+                self.state.product_roadmap = ""
                 if os.path.exists("app/APP_META.md"):
                     try: os.remove("app/APP_META.md")
                     except: pass
             
             self.state.inspiration_goal = ""
+            self.state.inspiration_target_route = "/"
+            self.state.inspiration_test_scenario = ""
+            self.state.inspiration_requires_design = True
             self.state.save()
