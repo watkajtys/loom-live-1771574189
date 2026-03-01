@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # The primary instance of Loom
+  loom-main:
+    build: .
+    container_name: loom-main
+    volumes:
+      # Map the memory to keep it across restarts
+      - ./loom_memory.json:/app/loom_memory.json
+      # Map session_state.json so the host can see it easily
+      - ./session_state.json:/app/session_state.json
+      # Map archive and viewer artifacts
+      - ./archive:/app/archive
+      - ./viewer/public/artifacts:/app/viewer/public/artifacts
+      # Map the app directory if you want to see/edit code from host
+      - ./app:/app/app
+    env_file: .env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    # Use a specific CMD if you want to pass flags
+    # command: python main.py --clean
+
+  # Example of a second instance (e.g. for a different project)
+  # Duplicate this block and change volumes/ports to run multiple
+  # loom-2:
+  #   build: .
+  #   container_name: loom-2
+  #   volumes:
+  #     - ./loom_memory_2.json:/app/loom_memory.json
+  #     - ./archive_2:/app/archive
+  #     - ./viewer_2/artifacts:/app/viewer/public/artifacts
+  #     - ./app_2:/app/app
+  #   env_file: .env_2
+  #   ports:
+  #     - "8081:8080"
+  #   restart: unless-stopped
