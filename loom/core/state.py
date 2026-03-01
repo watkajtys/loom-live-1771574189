@@ -49,6 +49,8 @@ _state_lock = threading.RLock()
 class ConductorState(BaseModel):
     project_name: str = "Loom Experiment"
     app_meta: str = ""
+    product_phase: str = "Phase 1: Core Loop MVP"
+    product_roadmap: str = ""
     repo_memory: dict = {}
     current_iteration: int = 0
     active_branch: str = "main"

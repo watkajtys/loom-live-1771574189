@@ -1316,6 +1316,7 @@ Based on this outcome, provide a brief summary of what we learned. Format as a s
                 next_prompt = f"""
 We just successfully implemented: '{self.state.inspiration_goal}' at route '{self.current_target_route}'. 
 App Identity: {self.state.app_meta}
+Current Product Phase: {self.state.product_phase}
 {memory_context}
 
 Current Codebase Files:
@@ -1323,14 +1324,46 @@ Current Codebase Files:
 {src_tree}
 ```
 
-Based on the meta and state, what is the best next step?
-1. Generate 3 distinct new features or routes.
-2. Output choice using: [SELECTED CONCEPT], [TARGET_ROUTE], [REQUIRES_DESIGN], [TEST_SCENARIO], [APP_META].
+You are a strict, product-minded General Manager overseeing this app. You do NOT invent random features. You build a real, viable product using a strict maturity playbook:
+
+THE PLAYBOOK:
+- Phase 1: Core Loop MVP (Focus: The single primary action must work flawlessly)
+- Phase 2: State & Retention (Focus: Saving data, localStorage, user memory, empty states)
+- Phase 3: Vibe & Polish (Focus: Typography, spacing, framer-motion animations, responsive design)
+- Phase 4: Monetization & Growth (Focus: Stripe paywalls, pricing pages, upgrade modals)
+
+YOUR TASK:
+1. Look at the Current Codebase Files and the feature we just shipped. 
+2. Determine if the app is ready to graduate to the next Phase in the playbook, or if it needs to stay in the current Phase to fix gaps.
+3. Decide the ONE most critical next step. 
+
+OUTPUT FORMAT:
+[NEW_PHASE]
+(e.g., Phase 2: State & Retention)
+
+[ROADMAP_UPDATE]
+A brief sentence explaining why you chose this phase and what the current status is.
+
+[SELECTED CONCEPT]
+The specific engineering/design goal for the next iteration based on the Phase.
+
+[TARGET_ROUTE]
+The URL path (e.g. /settings)
+
+[REQUIRES_DESIGN]
+TRUE or FALSE (e.g., wiring up localStorage is FALSE, adding a Pricing page is TRUE)
+
+[TEST_SCENARIO]
+A step-by-step playwright assertion to prove it works.
 """
                 next_idea = self.think(next_prompt, self.app_screenshot, temperature=0.8)
-                logger.info(f"Iterative Brainstorming Output:\n{next_idea}")
+                logger.info(f"PM Roadmap Review Output:\n{next_idea}")
                 self.current_brainstorm_output = next_idea
                 
+                if "[NEW_PHASE]" in next_idea:
+                    self.state.product_phase = next_idea.split("[NEW_PHASE]")[1].split("[")[0].strip()
+                if "[ROADMAP_UPDATE]" in next_idea:
+                    self.state.product_roadmap = next_idea.split("[ROADMAP_UPDATE]")[1].split("[")[0].strip()
                 if "[SELECTED CONCEPT]" in next_idea:
                     self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
                 if "[TARGET_ROUTE]" in next_idea:

@@ -167,12 +167,22 @@
                         <main className="w-[95%] max-w-[1800px] mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-8 pb-12">
                             <div className="lg:col-span-1 space-y-6 md:sticky md:top-6 max-h-[calc(100vh-350px)] overflow-y-auto pr-2">
                                 {state.app_meta && (
-                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8">
+                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
                                         <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full"></span>
                                             Product Identity
                                         </h2>
                                         <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap line-clamp-6 hover:line-clamp-none transition-all">{state.app_meta}</p>
+                                    </div>
+                                )}
+                                {(state.product_phase || state.product_roadmap) && (
+                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8">
+                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                            Roadmap Phase
+                                        </h2>
+                                        {state.product_phase && <div className="text-xs font-bold text-emerald-400 mb-2">{state.product_phase}</div>}
+                                        {state.product_roadmap && <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{state.product_roadmap}</p>}
                                     </div>
                                 )}
                                 <h2 className="text-lg font-semibold tracking-wider uppercase text-sm mb-4">Build Timeline</h2>
