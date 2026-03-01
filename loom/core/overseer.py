@@ -611,6 +611,16 @@ A simple, step-by-step description of how a person would use this to solve their
                 last_goal = self.state.history[-1].goal if self.state.history else "Initial Scaffold"
                 last_route = self.state.history[-1].target_route if self.state.history else "/"
 
+                # Ensure we have the visual context of the app even after a restart
+                if not self.app_screenshot and self.state.history and self.state.history[-1].attempts:
+                    last_attempt = self.state.history[-1].attempts[-1]
+                    if last_attempt.app_screenshot_path and os.path.exists(f"viewer/public/{last_attempt.app_screenshot_path}"):
+                        try:
+                            with open(f"viewer/public/{last_attempt.app_screenshot_path}", "rb") as f:
+                                self.app_screenshot = f.read()
+                        except Exception as e:
+                            logger.warning(f"Failed to load last screenshot for PM review: {e}")
+
                 next_prompt = f"""
 We just successfully implemented: '{last_goal}' at route '{last_route}'. 
 App Identity: {self.state.app_meta}
@@ -1192,9 +1202,9 @@ Target Route: {self.state.inspiration_target_route}
 The design files are in app/design. 
 CRITICAL RULES:
 1. Integrate this new feature into the existing application natively using the established design system (Tailwind classes, layout, components).
-2. The target flow/location is: '{self.state.inspiration_target_route}'. If this requires a new page, set up React Router without breaking existing pages. If it is a modal/overlay, integrate it cleanly into the current view.
-3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).4. You MUST write a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}".
-5. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
+2. The target flow/location is: '{self.state.inspiration_target_route}'. If this requires a new page, set up React Router without breaking existing pages AND add a visible link to it in the main app navigation so the user can reach it. If it is a modal/overlay, integrate it cleanly into the current view.
+3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).4. You MUST append a new Playwright integration test block (`test('...', async ({{ page }}) => {{...}})`) to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
+5. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
 """
             else:
                 return f"""
@@ -1204,11 +1214,10 @@ Target Route: {self.state.inspiration_target_route}
 {memory_context}
 
 CRITICAL RULES:
-1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout. 
+1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout.
 2. Focus purely on the underlying React logic, state management, or architecture as requested.
-3. You MUST write or update a Playwright integration test in `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}".
-4. CRITICAL: At the end of the test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`.
-"""
+3. You MUST append a new Playwright integration test block to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
+4. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`."""
         else:
             past_critiques = ""
             if self.current_iteration_record and self.current_iteration_record.attempts:     
