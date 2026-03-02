@@ -168,40 +168,19 @@
                             <div className="lg:col-span-1 space-y-6 md:sticky md:top-6 max-h-[calc(100vh-350px)] overflow-y-auto pr-2">
                                 {state.app_meta && (
                                     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
-                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full"></span>
+                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                                             Product Identity
                                         </h2>
                                         <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{state.app_meta}</p>
                                     </div>
                                 )}
                                 {(state.product_phase || state.product_roadmap) && (
-                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
-                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8">
+                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
                                             Roadmap Phase
                                         </h2>
                                         {state.product_phase && <div className="text-xs font-bold text-emerald-400 mb-2">{state.product_phase}</div>}
                                         {state.product_roadmap && <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{state.product_roadmap}</p>}
-                                    </div>
-                                )}
-                                {state.repo_memory?.learnings?.length > 0 && (
-                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8">
-                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                                            Technical Learnings
-                                        </h2>
-                                        <div className="space-y-4">
-                                            {state.repo_memory.learnings.map((l, i) => (
-                                                <div key={i} className="space-y-1">
-                                                    <div className="flex justify-between items-center">
-                                                        <span className="text-[9px] font-bold text-slate-500 uppercase">Iter {l.iteration}</span>
-                                                        <span className={`text-[8px] px-1 rounded ${l.success ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{l.success ? 'SUCCESS' : 'FAILED'}</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-400 font-mono leading-relaxed italic border-l border-slate-800 pl-2">{l.takeaways}</p>
-                                                </div>
-                                            ))}
-                                        </div>
                                     </div>
                                 )}
                                 <h2 className="text-lg font-semibold tracking-wider uppercase text-sm mb-4">Build Timeline</h2>
@@ -239,7 +218,7 @@
                                             </div>
                                             {iter.test_scenario && (
                                                 <div className="bg-slate-950/50 rounded-lg p-4 border border-slate-800">
-                                                    <h3 className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-2 flex items-center gap-2"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>Verification Scenario</h3>
+                                                    <h3 className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest mb-2">Verification Scenario</h3>
                                                     <p className="text-xs text-slate-300 font-mono leading-relaxed">{iter.test_scenario}</p>
                                                 </div>
                                             )}
@@ -446,11 +425,26 @@
                                             <div className="bg-slate-900 border border-amber-500/30 rounded-xl overflow-hidden shadow-lg mt-8">
                                                 <div className="bg-amber-950/20 p-4 border-b border-amber-500/20 flex justify-between items-center">
                                                     <h3 className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                                                        <span className="text-amber-500 text-[12px]">⚖</span> Architectural Review
+                                                        Architectural Review
                                                     </h3>
                                                 </div>
                                                 <div className="p-6">
                                                     <p className="text-[11px] text-slate-300 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-amber-500/30 pl-4">{iter.architectural_critique}</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {state.repo_memory?.learnings?.find(l => l.iteration === iter.id) && (
+                                            <div className="bg-slate-900 border border-blue-500/30 rounded-xl overflow-hidden shadow-lg mt-8">
+                                                <div className="bg-blue-950/20 p-4 border-b border-blue-500/20 flex justify-between items-center">
+                                                    <h3 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                                                        Technical Learnings
+                                                    </h3>
+                                                </div>
+                                                <div className="p-6">
+                                                    <p className="text-[11px] text-slate-300 font-mono whitespace-pre-wrap leading-relaxed border-l-2 border-blue-500/30 pl-4">
+                                                        {state.repo_memory.learnings.find(l => l.iteration === iter.id).takeaways}
+                                                    </p>
                                                 </div>
                                             </div>
                                         )}
