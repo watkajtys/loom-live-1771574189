@@ -585,7 +585,7 @@ A simple, step-by-step description of how a person would use this to solve their
                         self.state.inspiration_requires_design = False
                         
                 if "[TEST_SCENARIO]" in raw_response:
-                    self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip().lstrip(",: ").strip()
+                    self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].split("[")[0].strip().lstrip(",: ").strip()
                     
                 logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.state.inspiration_requires_design})")
                 
@@ -682,7 +682,7 @@ A step-by-step playwright assertion to prove it works.
                 if "[REQUIRES_DESIGN]" in next_idea:
                     self.state.inspiration_requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                 if "[TEST_SCENARIO]" in next_idea:
-                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip().lstrip(",: ").strip()
+                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[APP_META]" in next_idea:
                     meta_part = next_idea.split("[APP_META]")[1]
                     self.state.app_meta = (meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()).lstrip(",: ").strip()
