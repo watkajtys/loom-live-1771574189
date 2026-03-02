@@ -564,19 +564,19 @@ A simple, step-by-step description of how a person would use this to solve their
                 logger.info(f"Studio Brainstorming Output:\n{raw_response}")
                 self.current_brainstorm_output = raw_response            
                 if "[SELECTED CONCEPT]" in raw_response:
-                    self.state.inspiration_goal = raw_response.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
+                    self.state.inspiration_goal = raw_response.split("[SELECTED CONCEPT]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 else:
-                    self.state.inspiration_goal = raw_response.strip().split("\n")[-1]
+                    self.state.inspiration_goal = raw_response.strip().split("\n")[-1].lstrip(",: ").strip()
 
                 if "[APP_META]" in raw_response:
                     meta_part = raw_response.split("[APP_META]")[1]
-                    self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
+                    self.state.app_meta = (meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()).lstrip(",: ").strip()
                     # Ensure app directory exists before writing meta
                     os.makedirs("app", exist_ok=True)
                     with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
 
                 if "[TARGET_ROUTE]" in raw_response:
-                    self.state.inspiration_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                    self.state.inspiration_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip().lstrip(",: ").strip()
                     
                 self.state.inspiration_requires_design = True
                 if "[REQUIRES_DESIGN]" in raw_response:
@@ -585,7 +585,7 @@ A simple, step-by-step description of how a person would use this to solve their
                         self.state.inspiration_requires_design = False
                         
                 if "[TEST_SCENARIO]" in raw_response:
-                    self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip()
+                    self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].strip().lstrip(",: ").strip()
                     
                 logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.state.inspiration_requires_design})")
                 
@@ -672,17 +672,21 @@ A step-by-step playwright assertion to prove it works.
                 self.current_brainstorm_output = next_idea
                 
                 if "[NEW_PHASE]" in next_idea:
-                    self.state.product_phase = next_idea.split("[NEW_PHASE]")[1].split("[")[0].strip()
+                    self.state.product_phase = next_idea.split("[NEW_PHASE]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[ROADMAP_UPDATE]" in next_idea:
-                    self.state.product_roadmap = next_idea.split("[ROADMAP_UPDATE]")[1].split("[")[0].strip()
+                    self.state.product_roadmap = next_idea.split("[ROADMAP_UPDATE]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[SELECTED CONCEPT]" in next_idea:
-                    self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip()
+                    self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[TARGET_ROUTE]" in next_idea:
-                    self.state.inspiration_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip()
+                    self.state.inspiration_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[REQUIRES_DESIGN]" in next_idea:
                     self.state.inspiration_requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                 if "[TEST_SCENARIO]" in next_idea:
-                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip()
+                    self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].strip().lstrip(",: ").strip()
+                if "[APP_META]" in next_idea:
+                    meta_part = next_idea.split("[APP_META]")[1]
+                    self.state.app_meta = (meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()).lstrip(",: ").strip()
+                    with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
 
         # Record current iteration parameters immediately
         self.state.current_iteration += 1
