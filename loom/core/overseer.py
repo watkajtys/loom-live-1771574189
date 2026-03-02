@@ -412,12 +412,12 @@ export default defineConfig({
 });
 """)
         os.makedirs("app/tests", exist_ok=True)
-        with open("app/tests/example.spec.ts", "w") as f:
+        with open("app/tests/verify.spec.ts", "w") as f:
             f.write("""import { test, expect } from '@playwright/test';
 
-test('has title', async ({ page }) => {
+test('App initializes correctly', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle(/Loom App/);
+  await expect(page.locator('text=Loom Initialized')).toBeVisible();
 });
 """)
 
@@ -663,6 +663,9 @@ TRUE or FALSE (e.g., wiring up localStorage is FALSE, adding a Pricing page is T
 
 [TEST_SCENARIO]
 A step-by-step playwright assertion to prove it works.
+
+[APP_META]
+(Optional) If you are updating the product identity (e.g. Phase 3 Polish), provide the updated Name, Palette, and Typography. Otherwise, omit this tag.
 """
                 next_idea = self.think(next_prompt, self.app_screenshot, temperature=0.8)
                 logger.info(f"PM Roadmap Review Output:\n{next_idea}")
@@ -1203,7 +1206,8 @@ The design files are in app/design.
 CRITICAL RULES:
 1. Integrate this new feature into the existing application natively using the established design system (Tailwind classes, layout, components).
 2. The target flow/location is: '{self.state.inspiration_target_route}'. If this requires a new page, set up React Router without breaking existing pages AND add a visible link to it in the main app navigation so the user can reach it. If it is a modal/overlay, integrate it cleanly into the current view.
-3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).4. You MUST append a new Playwright integration test block (`test('...', async ({{ page }}) => {{...}})`) to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
+3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).
+4. You MUST append a new Playwright integration test block (`test('...', async ({{ page }}) => {{...}})`) to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
 5. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
 """
             else:
