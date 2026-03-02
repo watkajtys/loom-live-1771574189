@@ -172,7 +172,7 @@
                                             <span className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full"></span>
                                             Product Identity
                                         </h2>
-                                        <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap line-clamp-6 hover:line-clamp-none transition-all">{state.app_meta}</p>
+                                        <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{state.app_meta}</p>
                                     </div>
                                 )}
                                 {(state.product_phase || state.product_roadmap) && (
@@ -198,7 +198,7 @@
                                                 </div>
                                                 {iter.happiness_score > 0 && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${iter.happiness_score >= 8 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{iter.happiness_score}/10</span>}
                                             </div>
-                                            <p className="text-xs text-slate-400 line-clamp-2">{iter.goal}</p>
+                                            <p className="text-xs text-slate-400">{iter.goal}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -227,7 +227,7 @@
                                             {iter.negative_history?.length > 0 && (
                                                 <div className="pt-2">
                                                     <h3 className="text-[10px] font-bold text-red-400/50 uppercase tracking-widest mb-2">Negative Memory</h3>
-                                                    <div className="flex flex-wrap gap-2">{iter.negative_history.map((h, i) => <span key={i} className="text-[9px] bg-red-500/5 border border-red-500/10 text-red-400/60 px-2 py-0.5 rounded truncate max-w-xs">{h}</span>)}</div>
+                                                    <div className="flex flex-wrap gap-2">{iter.negative_history.map((h, i) => <span key={i} className="text-[9px] bg-red-500/5 border border-red-500/10 text-red-400/60 px-2 py-0.5 rounded break-all">{h}</span>)}</div>
                                                 </div>
                                             )}
                                         </div>
@@ -351,7 +351,7 @@
                                                         </div>
                                                         {iter.seed_review_critique && (
                                                             <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
-                                                                <p className="text-[9px] text-slate-500 font-mono line-clamp-4 hover:line-clamp-none transition-all">{iter.seed_review_critique}</p>
+                                                                <p className="text-[9px] text-slate-500 font-mono transition-all">{iter.seed_review_critique}</p>
                                                             </div>
                                                         )}
                                                     </div>
@@ -369,7 +369,7 @@
                                                         </div>
                                                          {iter.layout_review_critique && (
                                                             <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
-                                                                <p className="text-[9px] text-slate-500 font-mono line-clamp-4 hover:line-clamp-none transition-all">{iter.layout_review_critique}</p>
+                                                                <p className="text-[9px] text-slate-500 font-mono transition-all">{iter.layout_review_critique}</p>
                                                             </div>
                                                         )}
                                                     </div>
@@ -387,7 +387,7 @@
                                                         </div>
                                                          {iter.theme_review_critique && (
                                                             <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
-                                                                <p className="text-[9px] text-slate-500 font-mono line-clamp-4 hover:line-clamp-none transition-all">{iter.theme_review_critique}</p>
+                                                                <p className="text-[9px] text-slate-500 font-mono transition-all">{iter.theme_review_critique}</p>
                                                             </div>
                                                         )}
                                                     </div>
