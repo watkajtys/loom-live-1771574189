@@ -357,20 +357,20 @@
                                         )}
 
                                         {(iter.chosen_theme_path || iter.chosen_design_path) && (
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="grid grid-cols-1 gap-8">
                                                 {/* Phase 1 Winner */}
                                                 {iter.design_screenshot_path && (
                                                     <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg flex flex-col">
-                                                        <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
-                                                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phase 1: Seed</h3>
-                                                            <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-mono">SELECTED</span>
+                                                        <div className="p-3 bg-slate-800/50 border-b border-slate-800/50 flex justify-between items-center">
+                                                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phase 1 Winner: Studio Seed</h3>
+                                                            <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">Selected Concept</span>
                                                         </div>
                                                         <div className="flex-1 bg-slate-950/30 p-0 flex items-center justify-center">
                                                             <img src={`/viewer/public/${iter.design_screenshot_path}`} onClick={() => openGallery(iter.base_seed_paths.map(p => `/viewer/public/${p}`), iter.base_seed_paths.indexOf(iter.design_screenshot_path))} className="w-full h-auto cursor-pointer" />
                                                         </div>
                                                         {iter.seed_review_critique && (
-                                                            <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
-                                                                <p className="text-[9px] text-slate-500 font-mono transition-all">{iter.seed_review_critique}</p>
+                                                            <div className="p-4 bg-slate-950/30 border-t border-slate-800/50">
+                                                                <p className="text-[10px] text-slate-500 font-mono transition-all">{iter.seed_review_critique}</p>
                                                             </div>
                                                         )}
                                                     </div>
@@ -379,16 +379,16 @@
                                                 {/* Phase 2 Winner */}
                                                 {iter.chosen_design_path && (
                                                     <div className="bg-slate-900 border border-slate-700/50 rounded-xl overflow-hidden shadow-lg flex flex-col">
-                                                        <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
-                                                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phase 2: Layout</h3>
-                                                            <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-mono">SELECTED</span>
+                                                        <div className="p-3 bg-slate-800/50 border-b border-slate-800/50 flex justify-between items-center">
+                                                            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Phase 2 Winner: Structural Layout</h3>
+                                                            <span className="bg-blue-500/10 text-blue-400 text-[8px] px-2 py-0.5 rounded font-mono uppercase tracking-tighter">Evolution Winner</span>
                                                         </div>
                                                         <div className="flex-1 bg-slate-950/30 p-0 flex items-center justify-center">
                                                             <img src={`/viewer/public/${iter.chosen_design_path}`} onClick={() => openGallery(iter.design_variants_paths.map(p => `/viewer/public/${p}`), iter.design_variants_paths.indexOf(iter.chosen_design_path))} className="w-full h-auto cursor-pointer" />
                                                         </div>
                                                          {iter.layout_review_critique && (
-                                                            <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
-                                                                <p className="text-[9px] text-slate-500 font-mono transition-all">{iter.layout_review_critique}</p>
+                                                            <div className="p-4 bg-slate-950/30 border-t border-slate-800/50">
+                                                                <p className="text-[10px] text-slate-500 font-mono transition-all">{iter.layout_review_critique}</p>
                                                             </div>
                                                         )}
                                                     </div>
@@ -397,16 +397,16 @@
                                                 {/* Phase 3 Winner */}
                                                 {iter.chosen_theme_path && (
                                                     <div className="bg-slate-900 border border-emerald-500/30 rounded-xl overflow-hidden shadow-lg flex flex-col relative">
-                                                        <div className="absolute top-0 right-0 p-2 z-10"><span className="bg-emerald-500 text-white text-[8px] px-2 py-0.5 rounded-full font-bold shadow-lg">FINAL</span></div>
+                                                        <div className="absolute top-0 right-0 p-2 z-10"><span className="bg-emerald-500 text-white text-[8px] px-2 py-0.5 rounded-full font-bold shadow-lg">FINAL VIBE</span></div>
                                                         <div className="p-3 bg-emerald-950/10 border-b border-emerald-500/20 flex justify-between items-center">
-                                                            <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Phase 3: Theme</h3>
+                                                            <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Phase 3 Winner: Visual Materiality</h3>
                                                         </div>
                                                         <div className="flex-1 bg-slate-950/30 p-0 flex items-center justify-center">
                                                             <img src={`/viewer/public/${iter.chosen_theme_path}`} onClick={() => openGallery(iter.theme_variants_paths.map(p => `/viewer/public/${p}`), iter.theme_variants_paths.indexOf(iter.chosen_theme_path))} className="w-full h-auto cursor-pointer" />
                                                         </div>
                                                          {iter.theme_review_critique && (
-                                                            <div className="p-3 bg-slate-950/30 border-t border-slate-800/50">
-                                                                <p className="text-[9px] text-slate-500 font-mono transition-all">{iter.theme_review_critique}</p>
+                                                            <div className="p-4 bg-slate-950/30 border-t border-slate-800/50">
+                                                                <p className="text-[10px] text-slate-500 font-mono transition-all">{iter.theme_review_critique}</p>
                                                             </div>
                                                         )}
                                                     </div>
