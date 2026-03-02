@@ -176,13 +176,32 @@
                                     </div>
                                 )}
                                 {(state.product_phase || state.product_roadmap) && (
-                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8">
+                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
                                         <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
                                             Roadmap Phase
                                         </h2>
                                         {state.product_phase && <div className="text-xs font-bold text-emerald-400 mb-2">{state.product_phase}</div>}
                                         {state.product_roadmap && <p className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">{state.product_roadmap}</p>}
+                                    </div>
+                                )}
+                                {state.repo_memory?.learnings?.length > 0 && (
+                                    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-8">
+                                        <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                                            Technical Learnings
+                                        </h2>
+                                        <div className="space-y-4">
+                                            {state.repo_memory.learnings.map((l, i) => (
+                                                <div key={i} className="space-y-1">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase">Iter {l.iteration}</span>
+                                                        <span className={`text-[8px] px-1 rounded ${l.success ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{l.success ? 'SUCCESS' : 'FAILED'}</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 font-mono leading-relaxed italic border-l border-slate-800 pl-2">{l.takeaways}</p>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                                 <h2 className="text-lg font-semibold tracking-wider uppercase text-sm mb-4">Build Timeline</h2>
