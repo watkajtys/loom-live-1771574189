@@ -539,27 +539,26 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 
                 prompt = f"""
 You are a Lead Product Architect at a specialized Creative Collaboration Lab. 
-Your goal is to build a high-performance "Frame.io Competitor" for professional creative teams.
+Your goal is to build a "Frame.io Killer" - a next-generation video collaboration studio that is fundamentally *better*, faster, and more intuitive than anything currently on the market.
 
 [Studio Entropy Seed: {entropy_seed}]
 {past_history}
 
 CRITICAL DIRECTIVES:
-1. **VIDEO STUDIO FOCUS:** Build a professional Video Review and Collaboration Studio.
-2. **CORE REQUIREMENTS:**
-   - **Video Management:** Handling video uploads and high-quality proxy generation.
-   - **Frame-Accuracy:** Frame-accurate video playback and scrubbing.
-   - **Feedback Loop:** A collaborative timeline for timestamped feedback and threaded comments.
-   - **Comparative Analysis:** Tools for side-by-side or overlay comparison of different video versions/cuts.
-   - **Visual Annotations:** Tools for drawing directly on video frames to point out specific issues.
-3. **TECHNICAL LEVERAGE:** Focus on real-time presence (who is watching/scrubbing), seamless state sync via PocketBase, and handling large binary assets efficiently.
-4. **AVOID REPETITION:** Do NOT focus on "mindset" or "rituals." This is a utilitarian professional tool.
+1. **THE CHALLENGE:** Build a professional Video Review and Collaboration Studio that disrupts the current market leader (Frame.io).
+2. **CORE REQUIREMENTS (MUST BE SUPERIOR):**
+   - **Performance:** Instant, lag-free video scrubbing and interaction.
+   - **Collaboration:** Real-time multiplayer presence and collaborative timeline.
+   - **Precision:** Frame-accurate feedback and visual annotations.
+   - **Innovation:** Look for "Better" features - e.g., integrated AI clip analysis, automatic scene detection, or innovative A/B comparison modes.
+3. **TECHNICAL LEVERAGE:** Utilize PocketBase for real-time state sync, WebCodecs for high-performance video, and a highly responsive React/Tailwind UI.
+4. **AVOID REPETITION:** No rituals, no mindsets. This is high-octane professional production software.
 
 ### YOUR TASK:
-1. Brainstorm 5 distinct "Video Collaboration Studio" concepts. 
-   - Each should have a different structural "Edge" (e.g., focused on 3D/VFX, social media speed, or live broadcast).
-2. For each idea, define the "Video Logic" (how it handles frames/uploads) and the "Collaboration Engine."
-3. Select the concept that feels the most "Power-User Friendly" and "Technically Disruptive."
+1. Brainstorm 5 distinct "Frame.io Killer" concepts. 
+   - Each should identify a specific weakness in current tools and solve it elegantly.
+2. For each idea, define the "Superior Edge" (why a pro would switch from Frame.io today).
+3. Select the concept that feels the most "Future-Proof" and "Technically Impressive."
 
 CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS ARCHITECTURE.
 

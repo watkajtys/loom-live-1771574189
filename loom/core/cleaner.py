@@ -79,4 +79,13 @@ def clean_slate():
         except Exception as e:
             logger.error(f"Failed to wipe artifacts: {e}")
             
+    # 4. Wipe PocketBase Data
+    pb_data_dir = "pb_data"
+    if os.path.exists(pb_data_dir):
+        logger.info(f"Wiping PocketBase data directory: {pb_data_dir}...")
+        try:
+            shutil.rmtree(pb_data_dir)
+        except Exception as e:
+            logger.error(f"Failed to wipe pb_data: {e}")
+
     logger.info("[bold green]CLEAN SLATE COMPLETE. Ready to initialize new project.[/bold green]", extra={"markup": True})
