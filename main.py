@@ -25,6 +25,20 @@ from datetime import datetime
 
 logger = logging.getLogger("loom")
 
+def git_doctor():
+    """Ensures git is configured for commits."""
+    import subprocess
+    logger.info("Configuring Git identity...")
+    try:
+        subprocess.run(["git", "config", "--global", "user.email", "loom@example.com"], check=True)
+        subprocess.run(["git", "config", "--global", "user.name", "Loom Bot"], check=True)
+        # Prevent "dubious ownership" errors in Docker volumes
+        subprocess.run(["git", "config", "--global", "safe.directory", "*"], check=True)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to configure git: {e}")
+        return False
+
 def doctor():
     """Validates the environment before starting."""
     logger.info("Running system check...")
@@ -88,7 +102,8 @@ if __name__ == "__main__":
     logger.addHandler(state_handler)
     
     # Doctor check before anything else
-    if not doctor():
+    if not git_doctor() or not doctor():
+        import sys
         sys.exit(1)
         
     if args.clean:
