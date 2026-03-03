@@ -63,12 +63,19 @@ class Overseer:
         
         # Long-term memory
         self.lab_memory = {}
-        if os.path.exists("loom_memory.json"):
+        memory_path = Path("loom_memory.json")
+        if memory_path.exists() and memory_path.is_dir():
+            shutil.rmtree(memory_path)
+            
+        if memory_path.exists():
             try:
-                with open("loom_memory.json", "r", encoding="utf-8") as f:
+                with open(memory_path, "r", encoding="utf-8") as f:
                     self.lab_memory = json.load(f)
             except Exception as e:
                 logger.warning(f"Failed to load loom_memory.json: {e}")
+        else:
+            with open(memory_path, "w", encoding="utf-8") as f:
+                json.dump({"archive_count": 0, "technical_learnings": [], "past_projects": []}, f)
         
         # Ensure artifacts directory exists
         os.makedirs("viewer/public/artifacts", exist_ok=True)

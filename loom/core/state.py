@@ -113,6 +113,12 @@ class ConductorState(BaseModel):
         with _state_lock:
             if _global_state is not None:
                 return _global_state
+            
+            # Robust initialization to prevent directory-mount errors
+            if STATE_FILE.exists() and STATE_FILE.is_dir():
+                import shutil
+                shutil.rmtree(STATE_FILE)
+            
             if STATE_FILE.exists():
                 # Retry load if file is temporarily locked (e.g. by save process rename)
                 max_retries = 10
