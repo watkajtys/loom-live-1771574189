@@ -17,7 +17,7 @@ for model_name in models_to_test:
     try:
         model = genai.GenerativeModel(model_name)
         start_time = time.time()
-        response = model.generate_content("Say 'online'")
+        response = model.generate_content("Say 'online'", request_options={"timeout": 30})
         duration = time.time() - start_time
         print(f"  SUCCESS: {response.text.strip()} (took {duration:.2f}s)")
     except Exception as e:
