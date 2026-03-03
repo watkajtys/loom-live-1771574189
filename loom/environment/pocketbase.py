@@ -15,43 +15,32 @@ class DatabaseProvisioner:
 
     @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10))
     def ensure_admin(self):
-        """Creates an initial admin account if one doesn't exist, and authenticates."""
+        """Authenticates as a superuser. Relies on main.py db_doctor() having created the account."""
         logger.info("Connecting to PocketBase Database Soul...")
         
-        # 1. Try to Authenticate
-        auth_url = f"{self.pb_url}/api/admins/auth-with-password"
+        # PocketBase v0.23+ Superuser Auth Endpoint
+        auth_url = f"{self.pb_url}/api/collections/_superusers/auth-with-password"
         payload = {"identity": self.admin_email, "password": self.admin_password}
         
         try:
             resp = requests.post(auth_url, json=payload, timeout=5)
             if resp.status_code == 200:
                 self.token = resp.json().get("token")
-                logger.info("Successfully authenticated as PocketBase Admin.")
+                logger.info("Successfully authenticated as PocketBase Superuser.")
                 return True
+            else:
+                # Fallback for older PocketBase versions (< 0.23)
+                legacy_auth_url = f"{self.pb_url}/api/admins/auth-with-password"
+                resp = requests.post(legacy_auth_url, json=payload, timeout=5)
+                if resp.status_code == 200:
+                    self.token = resp.json().get("token")
+                    logger.info("Successfully authenticated as legacy PocketBase Admin.")
+                    return True
         except requests.exceptions.ConnectionError:
              logger.warning("PocketBase server is unreachable. Is the Docker container running?")
              raise Exception("PocketBase unreachable")
 
-        # 2. If Auth fails, try to create the first admin
-        logger.info("Admin auth failed. Attempting to create initial admin account...")
-        admins_url = f"{self.pb_url}/api/admins"
-        create_payload = {
-            "email": self.admin_email,
-            "password": self.admin_password,
-            "passwordConfirm": self.admin_password
-        }
-        
-        # PocketBase allows creating the first admin without auth
-        resp = requests.post(admins_url, json=create_payload)
-        if resp.status_code in [200, 201]:
-            logger.info("Created initial Admin account.")
-            # Re-authenticate
-            auth_resp = requests.post(auth_url, json=payload)
-            if auth_resp.status_code == 200:
-                self.token = auth_resp.json().get("token")
-                return True
-                
-        logger.error(f"Failed to create or authenticate Admin: {resp.text}")
+        logger.error(f"Failed to authenticate as Superuser: {resp.text}")
         return False
 
     def provision_schema(self, schema_json: list):

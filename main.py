@@ -25,6 +25,20 @@ from datetime import datetime
 
 logger = logging.getLogger("loom")
 
+def db_doctor():
+    """Ensures PocketBase superuser exists."""
+    import subprocess
+    logger.info("Configuring PocketBase Superuser...")
+    try:
+        # Use docker exec to run the pocketbase superuser command
+        # EMAIL and PASS match the DatabaseProvisioner defaults
+        cmd = ["docker", "exec", "loom-pocketbase", "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to configure PocketBase superuser: {e}")
+        return False
+
 def git_doctor():
     """Ensures git is configured for commits."""
     import subprocess
@@ -102,7 +116,7 @@ if __name__ == "__main__":
     logger.addHandler(state_handler)
     
     # Doctor check before anything else
-    if not git_doctor() or not doctor():
+    if not git_doctor() or not db_doctor() or not doctor():
         import sys
         sys.exit(1)
         
