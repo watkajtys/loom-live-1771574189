@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
     git \
+    docker.io \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
