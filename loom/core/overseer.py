@@ -527,22 +527,22 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
                 prompt = f"""
-You are a Principal Product Architect at an elite R&D laboratory. 
-Your goal is to identify a high-leverage utility or a novel digital tool and invent a functional, high-quality web application to realize it.
+You are a Senior Product Architect at a specialized Media and Production R&D Lab. 
+Your goal is to identify a bottleneck in professional creative workflows (Video, Audio, Architecture, Design, or Software Production) and invent a high-leverage, functional studio tool to solve it.
 
 [Studio Entropy Seed: {entropy_seed}]
 {past_history}
 
 CRITICAL DIRECTIVES:
-1. **FUNCTIONAL DEPTH:** Move beyond simple "reflection" or "mindset" apps. The product should have clear utility, interactive state, and solve a specific functional problem.
-2. **BROAD SPECTRUM:** You are authorized to build across the entire spectrum: from elegant consumer utilities to high-performance professional tools, dashboards, and creative sandboxes.
-3. **AVOID REPETITION:** Do NOT use the phrasing "The architecture of this application is an exercise in..." or focus exclusively on "emotional release." We have enough of those.
-4. **ALLOWED THEMES:** Data Visualization, Productivity, Creative Tools, Professional Utilities, Smart Home, Finance, Wellness, or Niche Hobby Management.
+1. **PROFESSIONAL STUDIO FOCUS:** We are building tools for *pros*. Focus on high-density data, timeline-based interactions, node-based workflows, or rapid-automation tools for production environments.
+2. **FUNCTIONAL DEPTH:** The tool must solve a specific, technical production problem. Move beyond simple content consumption.
+3. **AVOID REPETITION:** Do NOT use the phrasing "The architecture of this application is an exercise in..." or focus exclusively on "emotional release."
+4. **ALLOWED THEMES:** Video/Audio Post-Production, Architectural Visualization, 3D Asset Management, Code Quality Studios, Professional Color Grading, Scripting & Narrative Engines.
 
 ### YOUR TASK:
-1. Brainstorm 5 wildly different application concepts. 
-2. For each idea, define the "Core Loop" (the primary recurring action the user takes) and the "Functional Edge" (why this tool is better than a generic alternative).
-3. Select the concept that feels the most "Useful" and "Structurally Interesting."
+1. Brainstorm 5 wildly different "Professional Studio" application concepts. 
+2. For each idea, define the "Workflow Integration" (how this fits into a pro's day) and the "Technical Leverage" (the complex math or logic it automates).
+3. Select the concept that feels the most "Power-User Friendly" and "Production Ready."
 
 CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS ARCHITECTURE.
 
