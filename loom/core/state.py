@@ -108,6 +108,14 @@ class ConductorState(BaseModel):
             self.save()
 
     @classmethod
+    def reset(cls):
+        """Wipes the in-memory global state."""
+        global _global_state
+        with _state_lock:
+            _global_state = cls(live_logs=[])
+            return _global_state
+
+    @classmethod
     def load(cls) -> 'ConductorState':
         global _global_state
         with _state_lock:

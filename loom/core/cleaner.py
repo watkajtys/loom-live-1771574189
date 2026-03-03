@@ -13,12 +13,10 @@ def clean_slate():
     """
     # 0. Prevent state resurrection by resetting the singleton before logging
     try:
-        import loom.core.state as state_module
-        if hasattr(state_module, '_state_lock'):
-            with state_module._state_lock:
-                state_module._global_state = state_module.ConductorState(live_logs=[])
-    except Exception:
-        pass
+        from loom.core.state import ConductorState
+        ConductorState.reset()
+    except Exception as e:
+        logger.warning(f"Failed to reset in-memory state: {e}")
 
     logger.info("[bold red]INITIATING FULL SYSTEM CLEAN SLATE...[/bold red]", extra={"markup": True})
     

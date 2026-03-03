@@ -26,18 +26,31 @@ from datetime import datetime
 logger = logging.getLogger("loom")
 
 def db_doctor():
-    """Ensures PocketBase superuser exists."""
+    """Ensures PocketBase superuser exists, waiting for container to be ready."""
     import subprocess
+    import time
     logger.info("Configuring PocketBase Superuser...")
-    try:
-        # Use docker exec to run the pocketbase superuser command
-        # EMAIL and PASS match the DatabaseProvisioner defaults
-        cmd = ["docker", "exec", "loom-pocketbase", "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
-        subprocess.run(cmd, check=True, capture_output=True)
-        return True
-    except Exception as e:
-        logger.error(f"Failed to configure PocketBase superuser: {e}")
-        return False
+    
+    max_retries = 15
+    for i in range(max_retries):
+        try:
+            # First, check if the container is even running and responding to CLI
+            check_cmd = ["docker", "exec", "loom-pocketbase", "pocketbase", "--version"]
+            result = subprocess.run(check_cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                # Container is ready for CLI commands
+                cmd = ["docker", "exec", "loom-pocketbase", "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
+                subprocess.run(cmd, check=True, capture_output=True)
+                logger.info("PocketBase Superuser configured successfully.")
+                return True
+        except Exception as e:
+            if i == max_retries - 1:
+                logger.error(f"Failed to configure PocketBase superuser after {max_retries} attempts: {e}")
+                return False
+        
+        logger.info(f"Waiting for PocketBase container to stabilize (Attempt {i+1}/{max_retries})...")
+        time.sleep(2)
+    return False
 
 def git_doctor():
     """Ensures git is configured for commits."""

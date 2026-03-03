@@ -23,19 +23,24 @@ class DatabaseProvisioner:
         payload = {"identity": self.admin_email, "password": self.admin_password}
         
         try:
+            logger.info(f"Trying superuser auth at {auth_url}...")
             resp = requests.post(auth_url, json=payload, timeout=5)
             if resp.status_code == 200:
                 self.token = resp.json().get("token")
                 logger.info("Successfully authenticated as PocketBase Superuser.")
                 return True
             else:
+                logger.warning(f"Superuser auth failed ({resp.status_code}): {resp.text}")
                 # Fallback for older PocketBase versions (< 0.23)
                 legacy_auth_url = f"{self.pb_url}/api/admins/auth-with-password"
+                logger.info(f"Trying legacy admin auth at {legacy_auth_url}...")
                 resp = requests.post(legacy_auth_url, json=payload, timeout=5)
                 if resp.status_code == 200:
                     self.token = resp.json().get("token")
                     logger.info("Successfully authenticated as legacy PocketBase Admin.")
                     return True
+                else:
+                    logger.error(f"Legacy admin auth also failed ({resp.status_code}): {resp.text}")
         except requests.exceptions.ConnectionError:
              logger.warning("PocketBase server is unreachable. Is the Docker container running?")
              raise Exception("PocketBase unreachable")
