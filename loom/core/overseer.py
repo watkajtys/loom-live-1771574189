@@ -538,51 +538,47 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
                 prompt = f"""
-You are a Lead Product Architect at a specialized Creative Collaboration Lab. 
-Your goal is to build a "Frame.io Killer" - a next-generation video collaboration studio that is fundamentally *better*, faster, and more intuitive than anything currently on the market.
+You are a Lead Product Designer at an Indie Creative Tools Lab. 
+Your goal is to build a "Beautifully Simple Video Review Studio" designed specifically for independent creators and small teams who find current professional tools too bloated.
 
 [Studio Entropy Seed: {entropy_seed}]
 {past_history}
 
 CRITICAL DIRECTIVES:
-1. **THE CHALLENGE:** Build a professional Video Review and Collaboration Studio that disrupts the current market leader (Frame.io).
-2. **CORE REQUIREMENTS (MUST BE SUPERIOR):**
-   - **Performance:** Instant, lag-free video scrubbing and interaction.
-   - **Collaboration:** Real-time multiplayer presence and collaborative timeline.
-   - **Precision:** Frame-accurate feedback and visual annotations.
-   - **Innovation:** Look for "Better" features - e.g., integrated AI clip analysis, automatic scene detection, or innovative A/B comparison modes.
-3. **TECHNICAL LEVERAGE:** Utilize PocketBase for real-time state sync, WebCodecs for high-performance video, and a highly responsive React/Tailwind UI.
-4. **AVOID REPETITION:** No rituals, no mindsets. This is high-octane professional production software.
+1. **TIMELINE-FIRST FEEDBACK:** The core of the product is the timeline. It must be "Super Easy" to scrub through a video and leave a comment at a precise timestamp.
+2. **INDIE-FOCUSED UTILITY:** Focus on frictionless features: one-click video uploads, simple threaded comments on the timeline, and an interface that feels fast and lightweight.
+3. **FUNCTIONAL SIMPLICITY:** Move beyond complex "node graphs" or "S3 pipelines." Focus on the *User Experience* of a person saying "Fix this at 00:42."
+4. **AVOID WEIRDNESS:** Do not try to be "disruptive" or "revolutionary." Just build the most functional, reliable, and "obvious" version of a video review tool. 
 
 ### YOUR TASK:
-1. Brainstorm 5 distinct "Frame.io Killer" concepts. 
-   - Each should identify a specific weakness in current tools and solve it elegantly.
-2. For each idea, define the "Superior Edge" (why a pro would switch from Frame.io today).
-3. Select the concept that feels the most "Future-Proof" and "Technically Impressive."
+1. Brainstorm 5 distinct "Indie Video Studio" concepts. 
+   - Each should explore a different "Simplicity Edge" (e.g., one focused on mobile review, one on ultra-fast feedback, one on social-media-first creators).
+2. For each idea, define the "Timeline Interaction" (how the user leaves feedback) and the "Sharing Flow."
+3. Select the concept that is the most "Utility-First" and "Indie-Friendly."
 
 CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS ARCHITECTURE.
 
 4. Output your choice using the following structured tags:
 
 [SELECTED CONCEPT]
-A detailed paragraph describing the app's architecture, core video features, and the primary user flow.
+A detailed paragraph describing the app's architecture, core timeline features, and the primary user flow.
 
 [APP_META]
-Name: [A strong name for the product]
+Name: [A friendly, 1-2 word name for the product]
 Palette: [A sensory description of the colors]
 Typography: [The vibe of the font]
 
 [DATA_MODEL]
-Define the PocketBase schema (collections, fields) required for video projects, comments, annotations, and versioning.
+Define the PocketBase schema (collections, fields) required for projects, video files, and timeline comments.
 
 [TARGET_ROUTE]
-The URL path where the core experience will live (e.g. /studio, /review, /project)
+The URL path where the core experience will live (e.g. /review, /project, /watch)
 
 [REQUIRES_DESIGN]
 TRUE, FALSE, or REFINEMENT
 
 [TEST_SCENARIO]
-A step-by-step description of a specific video review interaction (e.g., "Upload a video, scrub to frame 42, add a comment, and verify it appears on the timeline").
+A step-by-step description of a specific interaction (e.g., "The user drags the playhead to 10 seconds, clicks the timeline, types 'Great shot', and verifies the comment appears at that exact spot").
 """
                 raw_response = self.think(prompt, temperature=0.9)
                 logger.info(f"Studio Brainstorming Output:\n{raw_response}")
