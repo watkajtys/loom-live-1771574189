@@ -1,14 +1,13 @@
 version: '3.8'
 
 services:
-    # The primary instance of Loom
-    loom-main:
-      build: .
-      container_name: loom-main
-      volumes:
-        - .:/app
-      env_file: .env
-  
+  # The primary instance of Loom
+  loom-main:
+    build: .
+    container_name: loom-main
+    volumes:
+      - .:/app
+    env_file: .env
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -26,19 +25,3 @@ services:
     ports:
       - "8090:8090"
     restart: unless-stopped
-
-  # Example of a second instance (e.g. for a different project)
-  # Duplicate this block and change volumes/ports to run multiple 
-
-  # loom-2:
-  #   build: .
-  #   container_name: loom-2
-  #   volumes:
-  #     - ./loom_memory_2.json:/app/loom_memory.json
-  #     - ./archive_2:/app/archive
-  #     - ./viewer_2/artifacts:/app/viewer/public/artifacts
-  #     - ./app_2:/app/app
-  #   env_file: .env_2
-  #   ports:
-  #     - "8081:8080"
-  #   restart: unless-stopped
