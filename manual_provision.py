@@ -10,17 +10,34 @@ EMAIL = "admin@loom.local"
 PASS = "loom_secure_password"
 
 def provision():
-    print(f"Authenticating with {PB_URL}...")
-    auth_url = f"{PB_URL}/api/collections/_superusers/auth-with-password"
-    payload = {"identity": EMAIL, "password": PASS}
+    creds = [
+        ("admin@loom.local", "loom_secure_password"),
+        ("test@test.com", "1234567890")
+    ]
     
-    resp = requests.post(auth_url, json=payload)
-    if resp.status_code != 200:
-        print(f"Auth failed: {resp.text}")
+    token = None
+    headers = None
+    
+    for email, password in creds:
+        print(f"Trying auth for {email}...")
+        auth_url = f"{PB_URL}/api/collections/_superusers/auth-with-password"
+        payload = {"identity": email, "password": password}
+        
+        try:
+            resp = requests.post(auth_url, json=payload)
+            if resp.status_code == 200:
+                print(f"  SUCCESS for {email}")
+                token = resp.json().get("token")
+                headers = {"Authorization": token, "Content-Type": "application/json"}
+                break
+            else:
+                print(f"  FAILED for {email}: {resp.text}")
+        except Exception as e:
+            print(f"  ERROR for {email}: {e}")
+    
+    if not token:
+        print("All auth attempts failed.")
         return
-    
-    token = resp.json().get("token")
-    headers = {"Authorization": token, "Content-Type": "application/json"}
     
     collections = [
         {
