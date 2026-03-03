@@ -35,7 +35,7 @@ class MockJulesClient(AgentProxy):
     def _generate_content_with_retry(self, content):
         """Helper to call Gemini with robust exponential backoff retries."""
         try:
-            return self.model.generate_content(content)
+            return self.model.generate_content(content, request_options={"timeout": 360})
         except Exception as e:
             logger.warning(f"Mock Jules Gemini call failed (attempting retry): {e}")
             raise e
