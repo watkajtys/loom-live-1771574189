@@ -15,28 +15,37 @@ def provision():
         ("test@test.com", "1234567890")
     ]
     
+    endpoints = [
+        f"{PB_URL}/api/collections/_superusers/auth-with-password",
+        f"{PB_URL}/api/admins/auth-with-password"
+    ]
+    
+    id_keys = ["identity", "email"]
+    
     token = None
     headers = None
     
     for email, password in creds:
-        print(f"Trying auth for {email}...")
-        auth_url = f"{PB_URL}/api/collections/_superusers/auth-with-password"
-        payload = {"identity": email, "password": password}
-        
-        try:
-            resp = requests.post(auth_url, json=payload)
-            if resp.status_code == 200:
-                print(f"  SUCCESS for {email}")
-                token = resp.json().get("token")
-                headers = {"Authorization": token, "Content-Type": "application/json"}
-                break
-            else:
-                print(f"  FAILED for {email}: {resp.text}")
-        except Exception as e:
-            print(f"  ERROR for {email}: {e}")
+        for auth_url in endpoints:
+            for id_key in id_keys:
+                print(f"Trying auth for {email} via {auth_url} ({id_key})...")
+                payload = {id_key: email, "password": password}
+                try:
+                    resp = requests.post(auth_url, json=payload, timeout=5)
+                    if resp.status_code == 200:
+                        print(f"  SUCCESS for {email}")
+                        token = resp.json().get("token")
+                        headers = {"Authorization": token, "Content-Type": "application/json"}
+                        break
+                    else:
+                        print(f"  FAILED ({resp.status_code})")
+                except Exception as e:
+                    print(f"  ERROR: {e}")
+            if token: break
+        if token: break
     
     if not token:
-        print("All auth attempts failed.")
+        print("All auth variants failed.")
         return
     
     collections = [

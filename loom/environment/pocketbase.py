@@ -13,42 +13,43 @@ class DatabaseProvisioner:
         self.admin_password = "loom_secure_password"
         self.token = None
 
-    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10))
-    def ensure_admin(self):
-        """Authenticates as a superuser. Relies on main.py db_doctor() having created the account."""
-        logger.info("Connecting to PocketBase Database Soul...")
+            @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10)) 
+            def ensure_admin(self):
+                """Authenticates as a superuser. Relies on main.py db_doctor() having created the account."""
+                logger.info(f"Connecting to PocketBase Database Soul at {self.pb_url}...")
         
-        # PocketBase v0.23+ Superuser Auth Endpoint
-        auth_url = f"{self.pb_url}/api/collections/_superusers/auth-with-password"
-        payload = {"identity": self.admin_email, "password": self.admin_password}
+                # Potential Auth Endpoints
+                endpoints = [
+                    f"{self.pb_url}/api/collections/_superusers/auth-with-password",
+                    f"{self.pb_url}/api/admins/auth-with-password"
+                ]
+                
+                # Potential Identity Keys
+                id_keys = ["identity", "email"]
         
-        try:
-            logger.info(f"Trying superuser auth at {auth_url}...")
-            resp = requests.post(auth_url, json=payload, timeout=5)
-            if resp.status_code == 200:
-                self.token = resp.json().get("token")
-                logger.info("Successfully authenticated as PocketBase Superuser.")
-                return True
-            else:
-                logger.warning(f"Superuser auth failed ({resp.status_code}): {resp.text}")
-                # Fallback for older PocketBase versions (< 0.23)
-                legacy_auth_url = f"{self.pb_url}/api/admins/auth-with-password"
-                logger.info(f"Trying legacy admin auth at {legacy_auth_url}...")
-                resp = requests.post(legacy_auth_url, json=payload, timeout=5)
-                if resp.status_code == 200:
-                    self.token = resp.json().get("token")
-                    logger.info("Successfully authenticated as legacy PocketBase Admin.")
-                    return True
-                else:
-                    logger.error(f"Legacy admin auth also failed ({resp.status_code}): {resp.text}")
-        except requests.exceptions.ConnectionError:
-             logger.warning("PocketBase server is unreachable. Is the Docker container running?")
-             raise Exception("PocketBase unreachable")
-
-        logger.error(f"Failed to authenticate as Superuser: {resp.text}")
-        return False
-
-    def provision_schema(self, schema_json: list):
+                for auth_url in endpoints:
+                    for id_key in id_keys:
+                        payload = {id_key: self.admin_email, "password": self.admin_password}
+                        try:
+                            logger.info(f"Requesting token from {auth_url} using {id_key} key...")
+                            resp = requests.post(auth_url, json=payload, timeout=10)
+                            
+                            if resp.status_code == 200:
+                                self.token = resp.json().get("token")
+                                logger.info(f"Successfully authenticated via {auth_url} ({id_key}).")
+                                return True
+                            
+                            logger.debug(f"Attempt failed ({resp.status_code}): {resp.text}")
+                        except requests.exceptions.ConnectionError:
+                             logger.warning(f"Connection refused to {self.pb_url}. Is the PocketBase container 'loom-pocketbase' running and healthy?")
+                             raise Exception("PocketBase unreachable")
+                        except Exception as e:
+                             logger.warning(f"Unexpected error during auth attempt: {e}")
+        
+                logger.error("All PocketBase authentication variants failed.")
+                return False
+        
+        def provision_schema(self, schema_json: list):
         """
         Takes a list of PocketBase collection definition dicts and pushes them to the API.
         This allows the LLM to define tables and we blindly create them.
