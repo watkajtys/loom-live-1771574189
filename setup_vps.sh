@@ -8,26 +8,29 @@ echo "------------------------------------------------"
 
 # 1. Update system and install basics
 echo "[1/4] Updating system packages..."
-sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install -y curl git gnupg lsb-release ca-certificates
+apt-get update && apt-get upgrade -y
+apt-get install -y curl git gnupg lsb-release ca-certificates
 
 # 2. Install Docker (the clean way)
 echo "[2/4] Installing Docker Engine..."
 if ! [ -x "$(command -v docker)" ]; then
-    sudo mkdir -p /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    echo 
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu 
-      $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    mkdir -p /etc/apt/keyrings
+    # Detect OS (ubuntu or debian)
+    ID=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+    CODENAME=$(grep "^VERSION_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
+    
+    curl -fsSL https://download.docker.com/linux/$ID/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$ID $CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 else
     echo "Docker is already installed. Skipping..."
 fi
 
 # 3. Enable Docker for current user
 echo "[3/4] Configuring Docker permissions..."
-sudo usermod -aG docker $USER || true
+usermod -aG docker $USER || true
 
 # 4. Final check and guidance
 echo "[4/4] Environment Ready!"
