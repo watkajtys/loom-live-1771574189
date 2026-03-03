@@ -902,66 +902,92 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 logger.error(f"Failed to create Stitch project: {e}")
 
         # 2. PARALLEL DISCOVERY (5 Independent Base Seeds in 5 Unique Projects)
-        logger.info(f"Generating 5 independent base seeds in parallel...")
-        self.state.current_status = "Phase 1: Generating 5 independent base seeds..."
-        self.state.save()
-        base_variants = [None] * 5
-        self.current_iteration_record.base_seed_paths = [None] * 5
-        design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.state.inspiration_target_route}"
-        
-        import concurrent.futures
-        
-        def generate_seed_worker(i, brief):
-            try:
-                unique_project_name = f"Loom {self.state.current_iteration} - Hypothesis {i+1}"
-                p_id = self.stitch.create_project(unique_project_name)
-                
-                logger.info(f"Worker {i+1}: Generating Seed in Project {p_id}...")
-                screens = self.stitch.generate_or_edit_screen(
-                    description=f"{design_prompt}\n\nSTRUCTURAL HYPOTHESIS: {brief}",
-                    project_id=p_id,
-                    screen_id=None 
-                )
-                if screens:
-                    win = screens[0]
-                    ts = int(time.time())
-                    # Capture all images but pick first as primary
-                    seed_rel_path = None
-                    for img_idx, img_bytes in enumerate(win["images"]):
-                        path = f"artifacts/iter_{self.state.current_iteration}_seed_{i+1}_{img_idx}_{ts}.png"
-                        with open(f"viewer/public/{path}", "wb") as f:
-                            f.write(img_bytes)
-                        if img_idx == 0: seed_rel_path = path
-                    
-                    self.current_iteration_record.base_seed_paths[i] = seed_rel_path
-                    self.state.save()
-                    
-                    return {
-                        "project_id": p_id, 
-                        "screen_id": win["screen_id"], 
-                        "html": win["html"], 
-                        "img": win["images"][0] if win["images"] else None,
-                        "images": win["images"],
-                        "brief": brief,
-                        "index": i
-                    }
-            except Exception as e:
-                logger.error(f"Worker {i+1} failed: {e}")
-                return None
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_seed = {executor.submit(generate_seed_worker, i, brief): i for i, brief in enumerate(briefs)}
-            results = []
-            for future in concurrent.futures.as_completed(future_to_seed):
-                res = future.result()
-                if res: results.append(res)
-
-        # Sort results back to original order
-        results.sort(key=lambda x: x["index"])
-        base_variants = [r for r in results if r is not None]
+        base_variants = []
+        if self.current_iteration_record.base_variants_data:
+            logger.info("Found existing base variants data. Loading from cache...")
+            for v_data in self.current_iteration_record.base_variants_data:
+                # Load the primary image back into memory for the vision critique
+                img_path = f"viewer/public/{v_data['img_path']}"
+                if os.path.exists(img_path):
+                    with open(img_path, "rb") as f:
+                        v_data["img"] = f.read()
+                    base_variants.append(v_data)
+            
+            if len(base_variants) < 5:
+                logger.warning(f"Only found {len(base_variants)}/5 valid base variants. Re-generating...")
+                base_variants = [] # Force re-generation if incomplete
 
         if not base_variants:
-            raise Exception("Failed to generate any base design seeds.")
+            logger.info(f"Generating 5 independent base seeds in parallel...")
+            self.state.current_status = "Phase 1: Generating 5 independent base seeds..."
+            self.state.save()
+            self.current_iteration_record.base_seed_paths = [None] * 5
+            design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.state.inspiration_target_route}"
+            
+            import concurrent.futures
+            
+            def generate_seed_worker(i, brief):
+                try:
+                    unique_project_name = f"Loom {self.state.current_iteration} - Hypothesis {i+1}"
+                    p_id = self.stitch.create_project(unique_project_name)
+                    
+                    logger.info(f"Worker {i+1}: Generating Seed in Project {p_id}...")
+                    screens = self.stitch.generate_or_edit_screen(
+                        description=f"{design_prompt}\n\nSTRUCTURAL HYPOTHESIS: {brief}",
+                        project_id=p_id,
+                        screen_id=None 
+                    )
+                    if screens:
+                        win = screens[0]
+                        ts = int(time.time())
+                        # Capture all images but pick first as primary
+                        seed_rel_path = None
+                        for img_idx, img_bytes in enumerate(win["images"]):
+                            path = f"artifacts/iter_{self.state.current_iteration}_seed_{i+1}_{img_idx}_{ts}.png"
+                            with open(f"viewer/public/{path}", "wb") as f:
+                                f.write(img_bytes)
+                            if img_idx == 0: seed_rel_path = path
+                        
+                        self.current_iteration_record.base_seed_paths[i] = seed_rel_path
+                        self.state.save()
+                        
+                        return {
+                            "project_id": p_id, 
+                            "screen_id": win["screen_id"], 
+                            "html": win["html"], 
+                            "img": win["images"][0] if win["images"] else None,
+                            "img_path": seed_rel_path,
+                            "images_count": len(win["images"]),
+                            "brief": brief,
+                            "index": i
+                        }
+                except Exception as e:
+                    logger.error(f"Worker {i+1} failed: {e}")
+                    return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_seed = {executor.submit(generate_seed_worker, i, brief): i for i, brief in enumerate(briefs)}
+                results = []
+                for future in concurrent.futures.as_completed(future_to_seed):
+                    res = future.result()
+                    if res: results.append(res)
+
+            # Sort results back to original order
+            results.sort(key=lambda x: x["index"])
+            base_variants = [r for r in results if r is not None]
+
+            if not base_variants:
+                raise Exception("Failed to generate any base design seeds.")
+            
+            # Save metadata for resumption (exclude raw bytes to keep state small)
+            metadata_only = []
+            for v in base_variants:
+                m = v.copy()
+                if "img" in m: del m["img"]
+                if "images" in m: del m["images"]
+                metadata_only.append(m)
+            self.current_iteration_record.base_variants_data = metadata_only
+            self.state.save()
 
         # Overseer picks the best Base Seed
         self.state.current_status = "Selecting the winning structural hypothesis..."
@@ -974,13 +1000,18 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             if var.get("img"):
                 content.append({"mime_type": "image/png", "data": var["img"]})
         
-        review_response = self.model.generate_content([*prompt, *content])
-        self.current_iteration_record.seed_review_critique = review_response.text.strip()
-        
         try:
-            best_base_idx_raw = int(''.join(filter(str.isdigit, review_response.text.split("\n")[-1]))) - 1
-            best_base_idx = max(0, min(len(base_variants)-1, best_base_idx_raw))
-        except:
+            review_response = self.model.generate_content([*prompt, *content])
+            self.current_iteration_record.seed_review_critique = review_response.text.strip()
+            
+            try:
+                best_base_idx_raw = int(''.join(filter(str.isdigit, review_response.text.split("\n")[-1]))) - 1
+                best_base_idx = max(0, min(len(base_variants)-1, best_base_idx_raw))
+            except:
+                best_base_idx = 0
+        except Exception as e:
+            logger.warning(f"Vision critique failed (timeout or API error): {e}. Falling back to first seed.")
+            self.current_iteration_record.seed_review_critique = f"Vision critique failed: {e}. Defaulted to Seed 1."
             best_base_idx = 0
             
         winning_seed = base_variants[best_base_idx]
@@ -1052,37 +1083,40 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 for idx, var in enumerate(valid_layouts):
                     layout_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
-                layout_res = self.model.generate_content([*prompt, *layout_content])
-                self.current_iteration_record.layout_review_critique = layout_res.text.strip()
                 try:
+                    layout_res = self.model.generate_content([*prompt, *layout_content])
+                    self.current_iteration_record.layout_review_critique = layout_res.text.strip()
                     best_l_idx = int(''.join(filter(str.isdigit, layout_res.text.split("\n")[-1]))) - 1
-                    if best_l_idx == 0:
-                        logger.info("Overseer chose to stick with the original Base Seed layout.")
-                        self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_screenshot_path
-                    else:
-                        var_idx = best_l_idx - 1
-                        screen_id = valid_layouts[var_idx]["screen_id"]
-                        winning_layout = valid_layouts[var_idx]
-                        self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_variants_paths[var_idx]
-                        
-                        # Clear old design files
-                        if os.path.exists("app/design"):
-                            for f in os.listdir("app/design"):
-                                if f.endswith(".html") or f.endswith(".png"):
-                                    try: os.remove(os.path.join("app/design", f))
-                                    except: pass
-                        else:
-                            os.makedirs("app/design", exist_ok=True)
-                                
-                        design_file = os.path.abspath("app/design/latest_design.html")
-                        if winning_layout.get("html_content"):
-                            with open(design_file, "w", encoding="utf-8") as f: f.write(winning_layout["html_content"])
-                        if winning_layout.get("images"):
-                            for img_idx, img_bytes in enumerate(winning_layout["images"]):
-                                ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
-                                with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
                 except Exception as e:
-                    logger.warning(f"Failed to parse LLM layout index selection: {e}")
+                    logger.warning(f"Vision layout critique failed: {e}. Defaulting to baseline.")
+                    self.current_iteration_record.layout_review_critique = f"Vision layout critique failed: {e}. Defaulted to baseline."
+                    best_l_idx = 0
+                
+                if best_l_idx == 0:
+                    logger.info("Overseer chose to stick with the original Base Seed layout.")
+                    self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_screenshot_path
+                else:
+                    var_idx = best_l_idx - 1
+                    screen_id = valid_layouts[var_idx]["screen_id"]
+                    winning_layout = valid_layouts[var_idx]
+                    self.current_iteration_record.chosen_design_path = self.current_iteration_record.design_variants_paths[var_idx]
+                    
+                    # Clear old design files
+                    if os.path.exists("app/design"):
+                        for f in os.listdir("app/design"):
+                            if f.endswith(".html") or f.endswith(".png"):
+                                try: os.remove(os.path.join("app/design", f))
+                                except: pass
+                    else:
+                        os.makedirs("app/design", exist_ok=True)
+                            
+                    design_file = os.path.abspath("app/design/latest_design.html")
+                    if winning_layout.get("html_content"):
+                        with open(design_file, "w", encoding="utf-8") as f: f.write(winning_layout["html_content"])
+                    if winning_layout.get("images"):
+                        for img_idx, img_bytes in enumerate(winning_layout["images"]):
+                            ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
+                            with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
             self.state.save()
 
         # 4. SINGLE-CALL THEME PASS (5 Variants)
@@ -1167,42 +1201,45 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 for idx, var in enumerate(valid_themes):
                     theme_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
-                theme_res = self.model.generate_content([*prompt, *theme_content])
-                theme_text = theme_res.text.strip()
-                self.current_iteration_record.theme_review_critique = theme_text
-                
-                if "[APP_META]" in theme_text:
-                    meta_part = theme_text.split("[APP_META]")[1]
-                    self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
-                    with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
-                
                 try:
+                    theme_res = self.model.generate_content([*prompt, *theme_content])
+                    theme_text = theme_res.text.strip()
+                    self.current_iteration_record.theme_review_critique = theme_text
+                    
+                    if "[APP_META]" in theme_text:
+                        meta_part = theme_text.split("[APP_META]")[1]
+                        self.state.app_meta = meta_part.split("[")[0].strip() if "[" in meta_part else meta_part.strip()
+                        with open("app/APP_META.md", "w", encoding="utf-8") as f: f.write(self.state.app_meta)
+                    
                     best_t_idx = int(''.join(filter(str.isdigit, theme_text.split("\n")[-1]))) - 1
-                    if best_t_idx == 0:
-                        logger.info("Overseer chose to stick with the baseline theme.")
-                    else:
-                        var_idx = best_t_idx - 1
-                        chosen_t = valid_themes[var_idx]
-                        self.current_iteration_record.chosen_theme_path = self.current_iteration_record.theme_variants_paths[var_idx]
-                        
-                        # Clear old design files
-                        if os.path.exists("app/design"):
-                            for f in os.listdir("app/design"):
-                                if f.endswith(".html") or f.endswith(".png"):
-                                    try: os.remove(os.path.join("app/design", f))
-                                    except: pass
-                        else:
-                            os.makedirs("app/design", exist_ok=True)
-                                
-                        design_file = os.path.abspath("app/design/latest_design.html")
-                        if chosen_t.get("html_content"):
-                            with open(design_file, "w", encoding="utf-8") as f: f.write(chosen_t["html_content"])
-                        if chosen_t.get("images"):
-                            for img_idx, img_bytes in enumerate(chosen_t["images"]):
-                                ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
-                                with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
                 except Exception as e:
-                    logger.warning(f"Failed to parse LLM theme index selection: {e}")
+                    logger.warning(f"Vision theme critique failed: {e}. Defaulting to baseline.")
+                    self.current_iteration_record.theme_review_critique = f"Vision theme critique failed: {e}. Defaulted to baseline."
+                    best_t_idx = 0
+                
+                if best_t_idx == 0:
+                    logger.info("Overseer chose to stick with the baseline theme.")
+                else:
+                    var_idx = best_t_idx - 1
+                    chosen_t = valid_themes[var_idx]
+                    self.current_iteration_record.chosen_theme_path = self.current_iteration_record.theme_variants_paths[var_idx]
+                    
+                    # Clear old design files
+                    if os.path.exists("app/design"):
+                        for f in os.listdir("app/design"):
+                            if f.endswith(".html") or f.endswith(".png"):
+                                try: os.remove(os.path.join("app/design", f))
+                                except: pass
+                    else:
+                        os.makedirs("app/design", exist_ok=True)
+                            
+                    design_file = os.path.abspath("app/design/latest_design.html")
+                    if chosen_t.get("html_content"):
+                        with open(design_file, "w", encoding="utf-8") as f: f.write(chosen_t["html_content"])
+                    if chosen_t.get("images"):
+                        for img_idx, img_bytes in enumerate(chosen_t["images"]):
+                            ref_name = "reference.png" if img_idx == 0 else f"reference_{img_idx}.png"
+                            with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
             self.state.save()
 
     def _step_implementation(self, branch_name):

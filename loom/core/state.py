@@ -30,6 +30,7 @@ class LoopIteration(BaseModel):
     brainstorming_output: Optional[str] = None
     base_briefs: List[str] = []
     base_seed_paths: List[str] = []
+    base_variants_data: Optional[List[dict]] = None
     seed_review_critique: Optional[str] = None
     design_screenshot_path: Optional[str] = None
     design_variants_paths: List[str] = []
