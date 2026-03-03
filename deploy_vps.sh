@@ -31,6 +31,14 @@ echo "--- Syncing to $REMOTE:$DEST ---"
 # Sync project files
 rsync -avz --progress "${EXCLUDES[@]}" ./ $REMOTE:$DEST
 
+# Sync .env file explicitly
+if [ -f ".env" ]; then
+    echo "--- Syncing .env file ---"
+    rsync -avz --progress .env $REMOTE:$DEST/.env
+else
+    echo "WARNING: No .env file found locally. You will need to create one on the server."
+fi
+
 # Helpful follow-up command
 echo "--- Deployment Sync Complete! ---"
 echo ""
