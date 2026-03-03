@@ -29,12 +29,12 @@ EXCLUDES=(
 echo "--- Syncing to $REMOTE:$DEST ---"
 
 # Sync project files
-rsync -avz --progress -e "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -i ~/.ssh/id_rsa" "${EXCLUDES[@]}" ./ $REMOTE:$DEST
+rsync -avz --progress "${EXCLUDES[@]}" ./ $REMOTE:$DEST
 
 # Sync .env file explicitly
 if [ -f ".env" ]; then
     echo "--- Syncing .env file ---"
-    rsync -avz --progress -e "ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -i ~/.ssh/id_rsa" .env $REMOTE:$DEST/.env
+    rsync -avz --progress .env $REMOTE:$DEST/.env
 else
     echo "WARNING: No .env file found locally. You will need to create one on the server."
 fi

@@ -130,6 +130,12 @@ class JulesClient(AgentProxy):
         logger.info("Applying patch...")
         try:
             self._run(["git", "apply", "--ignore-space-change", "--ignore-whitespace", "--reject", "jules.patch"], cwd="app")
+            
+            # Check for rejections
+            import glob
+            rej_files = glob.glob("app/**/*.rej", recursive=True)
+            if rej_files:
+                logger.warning(f"Patch applied but with rejections in: {rej_files}")
         except Exception as e:
             logger.warning(f"git apply --reject had warnings/errors, but proceeding: {e}")
             

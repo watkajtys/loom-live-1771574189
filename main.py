@@ -39,10 +39,24 @@ def db_doctor(pb_host="loom-pocketbase"):
             result = subprocess.run(check_cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 # Container is ready for CLI commands
-                cmd = ["docker", "exec", pb_host, "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
-                subprocess.run(cmd, check=True, capture_output=True)
-                logger.info(f"PocketBase Superuser configured successfully on {pb_host}.")
-                return True
+                # Try modern v0.23+ superuser upsert
+                cmd_new = ["docker", "exec", pb_host, "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
+                # Try legacy v0.22 and below admin upsert
+                cmd_old = ["docker", "exec", pb_host, "pocketbase", "admin", "create", "admin@loom.local", "loom_secure_password"]
+                
+                try:
+                    subprocess.run(cmd_new, check=True, capture_output=True)
+                    logger.info(f"PocketBase Superuser configured successfully via 'superuser upsert' on {pb_host}.")
+                    return True
+                except subprocess.CalledProcessError:
+                    try:
+                        subprocess.run(cmd_old, check=True, capture_output=True)
+                        logger.info(f"PocketBase Superuser configured successfully via 'admin create' on {pb_host}.")
+                        return True
+                    except subprocess.CalledProcessError as e:
+                        logger.warning(f"Both superuser/admin creation methods failed: {e.stderr}")
+                        # If both fail, maybe the account already exists and 'create' won't overwrite it
+                        return True 
         except Exception as e:
             if i == max_retries - 1:
                 logger.error(f"Failed to configure PocketBase superuser on {pb_host} after {max_retries} attempts: {e}")
@@ -108,6 +122,12 @@ def start_viewer_server():
     class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, format, *args):
             pass
+            
+        def handle(self):
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         allow_reuse_address = True

@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from loom.core.state import ConductorState, LoopIteration, AttemptRecord
 from loom.environment.git import GitClient
 from loom.environment.phoenix import PhoenixServer
-from loom.agents.stitch import StitchClient
+from loom.agents.stitch import StitchClient, StitchQuotaError
 from loom.agents.jules import JulesClient
 from loom.agents.mock_jules import MockJulesClient
 
@@ -90,10 +90,10 @@ class Overseer:
         else:
             genai.configure(api_key=api_key)
             # Principal Overseer (Logic & Planning)
-            self.model = genai.GenerativeModel('gemini-3-pro-preview')
+            self.model = genai.GenerativeModel('gemini-3.1-pro-preview')
             # Specialized Reviewers (Fast & Efficient)
-            self.arch_model = genai.GenerativeModel('gemini-3-flash-preview')
-            self.vision_model = genai.GenerativeModel('gemini-3-flash-preview')
+            self.arch_model = genai.GenerativeModel('gemini-3.1-flash-preview')
+            self.vision_model = genai.GenerativeModel('gemini-3.1-flash-preview')
 
     @retry(
         stop=stop_after_attempt(5),
@@ -590,8 +590,6 @@ A detailed paragraph describing the app's architecture, core timeline features, 
 
 [APP_META]
 Name: [A friendly, 1-2 word name for the product]
-Palette: [A sensory description of the colors]
-Typography: [The vibe of the font]
 
 [DATA_MODEL]
 Define the PocketBase schema (collections, fields) required for projects, video files, and timeline comments.
@@ -952,20 +950,24 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 base_variants = [] # Force re-generation if incomplete
 
         if not base_variants:
-            logger.info(f"Generating 5 independent base seeds in parallel...")
+            logger.info(f"Generating 5 independent base seeds sequentially...")
             self.state.current_status = "Phase 1: Generating 5 independent base seeds..."
             self.state.save()
             self.current_iteration_record.base_seed_paths = [None] * 5
             design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.state.inspiration_target_route}"
             
-            import concurrent.futures
-            
-            def generate_seed_worker(i, brief):
+            results = []
+            for i in range(5):
+                if i > 0:
+                    logger.info("Waiting 5s between Stitch calls...")
+                    time.sleep(5)
+                    
+                brief = briefs[i]
                 try:
                     unique_project_name = f"Loom {self.state.current_iteration} - Hypothesis {i+1}"
                     p_id = self.stitch.create_project(unique_project_name)
                     
-                    logger.info(f"Worker {i+1}: Generating Seed in Project {p_id}...")
+                    logger.info(f"Generating Seed {i+1}/5 in Project {p_id}...")
                     screens = self.stitch.generate_or_edit_screen(
                         description=f"{design_prompt}\n\nSTRUCTURAL HYPOTHESIS: {brief}",
                         project_id=p_id,
@@ -974,7 +976,6 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                     if screens:
                         win = screens[0]
                         ts = int(time.time())
-                        # Capture all images but pick first as primary
                         seed_rel_path = None
                         for img_idx, img_bytes in enumerate(win["images"]):
                             path = f"artifacts/iter_{self.state.current_iteration}_seed_{i+1}_{img_idx}_{ts}.png"
@@ -985,7 +986,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                         self.current_iteration_record.base_seed_paths[i] = seed_rel_path
                         self.state.save()
                         
-                        return {
+                        results.append({
                             "project_id": p_id, 
                             "screen_id": win["screen_id"], 
                             "html": win["html"], 
@@ -994,20 +995,13 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                             "images_count": len(win["images"]),
                             "brief": brief,
                             "index": i
-                        }
+                        })
+                except StitchQuotaError as sqe:
+                    logger.error(f"Stitch Quota Exhausted during genesis: {sqe}. Aborting pass.")
+                    break # Stop trying other seeds if we hit the quota
                 except Exception as e:
-                    logger.error(f"Worker {i+1} failed: {e}")
-                    return None
+                    logger.error(f"Failed to generate seed {i+1}: {e}")
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_seed = {executor.submit(generate_seed_worker, i, brief): i for i, brief in enumerate(briefs)}
-                results = []
-                for future in concurrent.futures.as_completed(future_to_seed):
-                    res = future.result()
-                    if res: results.append(res)
-
-            # Sort results back to original order
-            results.sort(key=lambda x: x["index"])
             base_variants = [r for r in results if r is not None]
 
             if not base_variants:

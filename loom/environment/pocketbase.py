@@ -18,22 +18,28 @@ class DatabaseProvisioner:
         """Authenticates as a superuser. Relies on main.py db_doctor() having created the account."""
         logger.info("Connecting to PocketBase Database Soul...")
 
-        # PocketBase v0.23+ Superuser Auth Endpoint
-        auth_url = f"{self.pb_url}/api/collections/_superusers/auth-with-password"
+        # Modern PocketBase v0.23+ Superuser Auth Endpoint
+        auth_url_new = f"{self.pb_url}/api/collections/_superusers/auth-with-password"
+        # Legacy PocketBase v0.22 and below Admin Auth Endpoint
+        auth_url_old = f"{self.pb_url}/api/admins/auth-with-password"
+        
         payload = {"identity": self.admin_email, "password": self.admin_password}
 
-        try:
-            resp = requests.post(auth_url, json=payload, timeout=5)
-            if resp.status_code == 200:
-                self.token = resp.json().get("token")
-                logger.info("Successfully authenticated as PocketBase Superuser.")
-                return True
-            else:
-                logger.error(f"Failed to authenticate as Superuser ({resp.status_code}): {resp.text}")
-                return False
-        except requests.exceptions.ConnectionError:
-             logger.warning("PocketBase server is unreachable. Is the Docker container running?")
-             raise Exception("PocketBase unreachable")
+        for url in [auth_url_new, auth_url_old]:
+            try:
+                resp = requests.post(url, json=payload, timeout=5)
+                if resp.status_code == 200:
+                    self.token = resp.json().get("token")
+                    logger.info(f"Successfully authenticated as PocketBase Superuser via {url.split('/')[-2]}.")
+                    return True
+                else:
+                    logger.debug(f"Auth failed for {url} ({resp.status_code})")
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"PocketBase server is unreachable at {url}. Is the Docker container running?")
+                raise Exception("PocketBase unreachable")
+        
+        logger.error("Failed to authenticate as Superuser/Admin with both modern and legacy endpoints.")
+        return False
 
     def provision_schema(self, schema_json: list):
         """

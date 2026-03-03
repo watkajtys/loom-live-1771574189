@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import logging
 import requests
@@ -9,6 +10,10 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 logger = logging.getLogger("loom")
 DESIGN_DIR = Path("app/design")
+
+class StitchQuotaError(Exception):
+    """Raised when the Stitch API quota is exhausted."""
+    pass
 
 class StitchClient(AgentProxy):
     """
@@ -54,9 +59,25 @@ class StitchClient(AgentProxy):
         
         if not response.ok:
             logger.error(f"Stitch API Error ({response.status_code}): {response.text}")
+            if response.status_code == 429:
+                raise StitchQuotaError("Stitch API Quota Exhausted (429)")
             raise Exception(f"Stitch API request failed: {response.status_code}")
 
         data = response.json()
+        
+        # Check for error in JSON-RPC result content
+        result = data.get("result", {})
+        if result.get("isError"):
+            error_text = ""
+            for block in result.get("content", []):
+                if block.get("type") == "text":
+                    error_text += block.get("text", "")
+            
+            if "Resource has been exhausted" in error_text:
+                raise StitchQuotaError(f"Stitch Quota Exhausted: {error_text}")
+            
+            raise Exception(f"Stitch Tool Error: {error_text}")
+
         if "error" in data:
             raise Exception(f"Stitch API Error: {data['error']}")
         return data
@@ -114,6 +135,7 @@ class StitchClient(AgentProxy):
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
         retry=retry_if_exception_type(Exception),
+        retry_error_callback=lambda state: state.outcome.result() if not state.outcome.failed else None,
         before_sleep=before_sleep_log(logger, logging.WARNING)
     )
     def generate_or_edit_screen(self, description: str, project_id: str, screen_id: Optional[str] = None) -> list:
@@ -124,87 +146,100 @@ class StitchClient(AgentProxy):
         nonce = uuid.uuid4().hex[:8]
         enforced_description = f"{description}\n\n[Request ID: {nonce}]\n\nCRITICAL: You must generate a complete UI design based on this prompt. Do NOT ask any follow-up questions or request clarification."
         
-        if screen_id:
-            logger.info(f"Editing existing screen {screen_id} in project {project_id} using GEMINI_3_PRO: {description}")
-            method = "edit_screens"
-            arguments = {
-                "projectId": project_id,
-                "selectedScreenIds": [screen_id],
-                "prompt": enforced_description,
-                "modelId": "GEMINI_3_PRO",
-                "deviceType": "DESKTOP"
-            }
-        else:
-            logger.info(f"Generating new screen in project {project_id} using GEMINI_3_PRO: {description}")
-            method = "generate_screen_from_text"
-            arguments = {
-                "projectId": project_id,
-                "prompt": enforced_description,
-                "modelId": "GEMINI_3_PRO",
-                "deviceType": "DESKTOP"
-            }
+        try:
+            if screen_id:
+                logger.info(f"Editing existing screen {screen_id} in project {project_id}: {description}")
+                method = "edit_screens"
+                arguments = {
+                    "projectId": project_id,
+                    "selectedScreenIds": [screen_id],
+                    "prompt": enforced_description,
+                    "deviceType": "DESKTOP"
+                }
+            else:
+                logger.info(f"Generating new screen in project {project_id}: {description}")
+                method = "generate_screen_from_text"
+                arguments = {
+                    "projectId": project_id,
+                    "prompt": enforced_description,
+                    "deviceType": "DESKTOP"
+                }
+                
+            logger.info(f"Calling Stitch API (method={method}, timeout=600s)...")
+            data = self._call_mcp(method, arguments, project_id)
             
-        logger.info(f"Calling Stitch API (method={method}, timeout=600s)...")
-        data = self._call_mcp(method, arguments, project_id)
-        
-        result = data.get("result", {})
-        content_blocks = result.get("content", [])
-        all_screens = []
-        
-        for block in content_blocks:
-            if block.get("type") == "text":
-                raw_text = block.get("text", "")
-                if "The service is currently unavailable" in raw_text:
-                     raise Exception("Stitch Service Unavailable")
-                try:
-                    inner_json = json.loads(raw_text)
-                    
-                    output_components = inner_json.get("outputComponents", [{}])
-                    if "text" in output_components[0] and "design" not in output_components[0]:
-                        stitch_response = output_components[0]["text"]
-                        raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
-                    screens = output_components[0].get("design", {}).get("screens", [])
-                    
-                    for screen in screens:
-                        screen_data = {
-                            "screen_id": screen.get("name", "").split("/")[-1] or screen_id,
-                            "html": "",
-                            "images": []
-                        }
-                        
-                        # Collect Primary Screenshot
-                        if "screenshot" in screen:
-                            img_url = screen["screenshot"].get("downloadUrl")
-                            if img_url:
-                                img_resp = requests.get(img_url, timeout=30)
-                                if img_resp.ok:
-                                    screen_data["images"].append(img_resp.content)
-                        
-                        # Collect Additional Screenshots
-                        for add_img in screen.get("additionalScreenshots", []):
-                            add_url = add_img.get("downloadUrl")
-                            if add_url:
-                                add_resp = requests.get(add_url, timeout=30)
-                                if add_resp.ok:
-                                    screen_data["images"].append(add_resp.content)
+            result = data.get("result", {})
+            content_blocks = result.get("content", [])
+            
+            if not content_blocks:
+                logger.error(f"Stitch API returned no content blocks. Raw Result: {result}")
 
-                        # Download HTML
-                        if "htmlCode" in screen:
-                            download_url = screen["htmlCode"].get("downloadUrl")
-                            if download_url:
-                                html_resp = requests.get(download_url, timeout=30)
-                                if html_resp.ok:
-                                    screen_data["html"] = html_resp.text
+            all_screens = []
+            
+            for block in content_blocks:
+                if block.get("type") == "text":
+                    raw_text = block.get("text", "")
+                    logger.debug(f"Stitch Raw Block Text: {raw_text[:500]}...")
+                    if "The service is currently unavailable" in raw_text:
+                         raise Exception("Stitch Service Unavailable")
+                    try:
+                        inner_json = json.loads(raw_text)
                         
-                        if screen_data["html"] or screen_data["images"]:
-                            all_screens.append(screen_data)
-                except json.JSONDecodeError:
-                    pass
+                        output_components = inner_json.get("outputComponents", [{}])
+                        if "text" in output_components[0] and "design" not in output_components[0]:
+                            stitch_response = output_components[0]["text"]
+                            raise Exception(f"Stitch asked a question or failed to generate UI: {stitch_response}")
+                        screens = output_components[0].get("design", {}).get("screens", [])
+                        
+                        for screen in screens:
+                            screen_data = {
+                                "screen_id": screen.get("name", "").split("/")[-1] or screen_id,
+                                "html": "",
+                                "images": []
+                            }
+                            
+                            # Collect Primary Screenshot
+                            if "screenshot" in screen:
+                                img_url = screen["screenshot"].get("downloadUrl")
+                                if img_url:
+                                    img_resp = requests.get(img_url, timeout=30)
+                                    if img_resp.ok:
+                                        screen_data["images"].append(img_resp.content)
+                            
+                            # Collect Additional Screenshots
+                            for add_img in screen.get("additionalScreenshots", []):
+                                add_url = add_img.get("downloadUrl")
+                                if add_url:
+                                    add_resp = requests.get(add_url, timeout=30)
+                                    if add_resp.ok:
+                                        screen_data["images"].append(add_resp.content)
 
-        if not all_screens:
-            raise Exception("No design content generated.")
+                            # Download HTML
+                            if "htmlCode" in screen:
+                                download_url = screen["htmlCode"].get("downloadUrl")
+                                if download_url:
+                                    html_resp = requests.get(download_url, timeout=30)
+                                    if html_resp.ok:
+                                        screen_data["html"] = html_resp.text
+                            
+                            if screen_data["html"] or screen_data["images"]:
+                                all_screens.append(screen_data)
+                    except json.JSONDecodeError:
+                        pass
 
-        return all_screens
+            if not all_screens:
+                logger.warning("No design content generated in direct response. Attempting list_screens fallback...")
+                all_screens = self.list_screens(project_id)
+                
+            if not all_screens:
+                raise Exception("No design content generated even after fallback.")
+
+            return all_screens
+        except StitchQuotaError:
+            # Re-raise to stop retry
+            raise
+        except Exception as e:
+            raise e
 
     @retry(
         stop=stop_after_attempt(3),
@@ -220,7 +255,6 @@ class StitchClient(AgentProxy):
             "projectId": project_id,
             "selectedScreenIds": [screen_id],
             "prompt": prompt,
-            "modelId": "GEMINI_3_PRO",
             "deviceType": "DESKTOP",
             "variantOptions": {
                 "variantCount": count,
@@ -281,3 +315,75 @@ class StitchClient(AgentProxy):
                     pass
         
         return variants
+
+    def list_screens(self, project_id: str) -> list:
+        """
+        Lists all screens in a project. Returns list of screen dicts.
+        """
+        # Give it up to 3 attempts with 30s sleeps to find screens
+        for attempt in range(3):
+            logger.info(f"Listing screens for project {project_id} (Attempt {attempt+1}/3)...")
+            try:
+                data = self._call_mcp("list_screens", {"projectId": project_id}, project_id)
+            except StitchQuotaError:
+                raise
+            except Exception as e:
+                logger.warning(f"list_screens attempt {attempt+1} failed: {e}")
+                if attempt < 2:
+                    time.sleep(30)
+                    continue
+                return []
+            
+            result = data.get("result", {})
+            content_blocks = result.get("content", [])
+            screens_list = []
+            
+            for block in content_blocks:
+                if block.get("type") == "text":
+                    try:
+                        # The text content is likely a JSON string of the list_screens response
+                        raw_text = block.get("text", "")
+                        inner = json.loads(raw_text)
+                        
+                        # Handle both direct list or dict with 'screens' key
+                        screens = []
+                        if isinstance(inner, list):
+                            screens = inner
+                        elif isinstance(inner, dict):
+                            screens = inner.get("screens", [])
+                        
+                        for screen in screens:
+                            screen_data = {
+                                "screen_id": screen.get("name", "").split("/")[-1],
+                                "html": "",
+                                "images": []
+                            }
+                            
+                            # Screenshot
+                            if "screenshot" in screen:
+                                img_url = screen["screenshot"].get("downloadUrl")
+                                if img_url:
+                                    img_resp = requests.get(img_url, timeout=30)
+                                    if img_resp.ok: screen_data["images"].append(img_resp.content)
+                            
+                            # HTML
+                            if "htmlCode" in screen:
+                                download_url = screen["htmlCode"].get("downloadUrl")
+                                if download_url:
+                                    html_resp = requests.get(download_url, timeout=30)
+                                    if html_resp.ok: screen_data["html"] = html_resp.text
+                                    
+                            if screen_data["html"] or screen_data["images"]:
+                                screens_list.append(screen_data)
+                    except json.JSONDecodeError:
+                        logger.debug(f"Failed to parse text block as JSON: {raw_text[:200]}")
+                        pass
+            
+            if screens_list:
+                return screens_list
+            
+            if attempt < 2:
+                logger.info("No screens found yet, waiting 30s...")
+                time.sleep(30)
+                
+        return []
