@@ -47,7 +47,7 @@ class PhoenixServer:
     @retry(stop=stop_after_attempt(10), wait=wait_exponential(multiplier=1, min=2, max=10))
     def wait_for_ready(self):
         """Polls localhost until it returns 200 OK."""
-        url = f"http://localhost:{self.port}"
+        url = f"http://127.0.0.1:{self.port}"
         logger.info(f"Waiting for {url}...")
         response = requests.get(url, timeout=2)
         if response.status_code == 200:
