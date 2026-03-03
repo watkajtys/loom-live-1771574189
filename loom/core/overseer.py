@@ -692,7 +692,7 @@ TRUE, FALSE, or REFINEMENT (Use REFINEMENT if the goal is fixing CSS/UI to match
 A step-by-step playwright assertion to prove it works.
 
 [DATA_MODEL]
-(Optional) Update the Firestore schema if new data structures are required.
+(Optional) Update the PocketBase schema if new data structures are required.
 
 [APP_META]
 (Optional) If you are updating the product identity (e.g. Phase 3 Polish), provide the updated Name, Palette, and Typography. Otherwise, omit this tag.
