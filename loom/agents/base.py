@@ -16,7 +16,7 @@ class AgentProxy:
                 text=True, 
                 check=True,
                 shell=(os.name == 'nt'),
-                timeout=300 # 5 minute timeout
+                timeout=600 # 10 minute timeout
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:

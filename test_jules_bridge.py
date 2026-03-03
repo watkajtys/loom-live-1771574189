@@ -141,7 +141,7 @@ print(f"Session Created: {session_name}")
 
 # 6. Poll Session Status
 print("Waiting for Jules to finish task...")
-MAX_POLL_ATTEMPTS = 360  # 60 minutes (360 * 10s)
+MAX_POLL_ATTEMPTS = 1440  # 4 hours (1440 * 10s)
 for attempt in range(MAX_POLL_ATTEMPTS):
     time.sleep(10)
     try:

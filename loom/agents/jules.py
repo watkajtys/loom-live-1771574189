@@ -20,7 +20,7 @@ class JulesClient(AgentProxy):
         
         logger.info(f"Waiting for source {expected_source} to be available to Jules...")
         source_found = False
-        for attempt in range(12):
+        for attempt in range(60): # 5 minute timeout for branch/source propagation
             time.sleep(5)
             page_token = None
             while True:
@@ -68,7 +68,7 @@ class JulesClient(AgentProxy):
         patch_content = None
         seen_activities = set()
 
-        for _ in range(360): # 1 hour timeout
+        for _ in range(1440): # 4 hour timeout
             time.sleep(10)
             
             # Poll for activities to log progress

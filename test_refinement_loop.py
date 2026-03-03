@@ -151,7 +151,7 @@ print(f"Session: {session_name}")
 
 print("Waiting for Jules...")
 patch_content = None
-for _ in range(360):
+for _ in range(1440): # 4 hour timeout
     time.sleep(10)
     status = requests.get(f"{JULES_API}/{session_name}", headers={"X-Goog-Api-Key": jules_key}).json()
     state = status.get("state")

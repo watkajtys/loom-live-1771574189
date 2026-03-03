@@ -134,16 +134,17 @@ if __name__ == "__main__":
     state_handler = StateLogHandler()
     logger.addHandler(state_handler)
     
+    # Perform clean slate BEFORE doctor checks if requested
+    if args.clean:
+        clean_slate()
+    
     # PocketBase hostname from environment
     pb_host = os.getenv("PB_HOSTNAME", "loom-pocketbase")
     
-    # Doctor check before anything else
+    # Doctor check after potential clean
     if not git_doctor() or not db_doctor(pb_host) or not doctor():
         import sys
         sys.exit(1)
-        
-    if args.clean:
-        clean_slate()
     
     # Seed the state if arguments provided
     if args.name or args.goal or args.data_model:
