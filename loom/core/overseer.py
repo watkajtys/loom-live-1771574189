@@ -110,6 +110,7 @@ class Overseer:
         """Helper to call Gemini with robust exponential backoff retries."""
         try:
             # Add a request-level timeout to force a DeadlineExceeded exception
+            logger.info(f"Sending request to Gemini ({model.model_name})...")
             return model.generate_content(content, generation_config=generation_config, request_options={"timeout": 360})
         except Exception as e:
             logger.warning(f"Gemini call failed (attempting retry): {e}")
