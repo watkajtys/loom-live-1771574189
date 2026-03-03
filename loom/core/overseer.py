@@ -1022,7 +1022,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 content.append({"mime_type": "image/png", "data": var["img"]})
         
         try:
-            review_response = self._generate_content_with_retry(self.model, [*prompt, *content])
+            review_response = self._generate_content_with_retry(self.vision_model, [*prompt, *content])
             self.current_iteration_record.seed_review_critique = review_response.text.strip()
             
             try:
@@ -1105,7 +1105,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                     layout_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
                 try:
-                    layout_res = self._generate_content_with_retry(self.model, [*prompt, *layout_content])
+                    layout_res = self._generate_content_with_retry(self.vision_model, [*prompt, *layout_content])
                     self.current_iteration_record.layout_review_critique = layout_res.text.strip()
                     best_l_idx = int(''.join(filter(str.isdigit, layout_res.text.split("\n")[-1]))) - 1
                 except Exception as e:
@@ -1223,7 +1223,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                     theme_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
                 try:
-                    theme_res = self._generate_content_with_retry(self.model, [*prompt, *theme_content])
+                    theme_res = self._generate_content_with_retry(self.vision_model, [*prompt, *theme_content])
                     theme_text = theme_res.text.strip()
                     self.current_iteration_record.theme_review_critique = theme_text
                     

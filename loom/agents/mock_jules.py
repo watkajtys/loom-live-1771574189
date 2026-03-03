@@ -19,7 +19,7 @@ class MockJulesClient(AgentProxy):
             logger.warning("GEMINI_API_KEY missing for MockJules. Code generation will fail.")
         else:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            self.model = genai.GenerativeModel('gemini-3.1-pro-preview')
 
     @retry(
         stop=stop_after_attempt(5),
