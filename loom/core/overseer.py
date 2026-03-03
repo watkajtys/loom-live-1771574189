@@ -1194,6 +1194,57 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
 
     def _step_implementation(self, branch_name):
         self.state.current_phase = LoomPhase.IMPLEMENTATION.value
+        
+        # 1. Autonomous Database Provisioning (The Data Soul)
+        if self.state.inspiration_data_model:
+            logger.info("Overseer is provisioning PocketBase schema...")
+            self.state.current_status = "Provisioning database schema..."
+            self.state.save()
+            
+            try:
+                from loom.environment.pocketbase import DatabaseProvisioner
+                provisioner = DatabaseProvisioner()
+                
+                # Ask LLM to translate plain text data model to PocketBase JSON Schema
+                schema_prompt = f"""
+Convert the following data model description into a JSON array of PocketBase collection definitions.
+Data Model: {self.state.inspiration_data_model}
+
+Rules:
+1. Each object in the array must represent a collection.
+2. Required fields for each collection: "name" (string), "type" ("base" or "auth"), "schema" (array of field definition objects).
+3. Valid field types: "text", "number", "bool", "email", "url", "date", "select", "json", "file", "relation".
+4. Set "listRule", "viewRule", "createRule", "updateRule", "deleteRule" to "" (empty string = public access) for easy prototyping.
+5. Return ONLY valid JSON, no markdown blocks.
+
+Example output:
+[
+  {{
+    "name": "posts",
+    "type": "base",
+    "schema": [
+      {{"name": "title", "type": "text", "required": true}},
+      {{"name": "views", "type": "number", "required": false}}
+    ],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  }}
+]
+"""
+                schema_json_str = self.model.generate_content(schema_prompt).text.strip()
+                # Clean markdown if present
+                schema_json_str = schema_json_str.replace("```json", "").replace("```", "").strip()
+                
+                import json
+                schema_json = json.loads(schema_json_str)
+                
+                success = provisioner.provision_schema(schema_json)
+                if success:
+                    logger.info("Successfully provisioned PocketBase schema.")
+                else:
+                    logger.warning("Failed to provision some or all PocketBase collections.")
+            except Exception as e:
+                logger.error(f"Failed to provision database: {e}")
+
         max_attempts = 50
         current_attempt = 1
         while current_attempt <= max_attempts:
