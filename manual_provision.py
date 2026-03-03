@@ -11,6 +11,7 @@ PASS = "loom_secure_password"
 
 def provision():
     creds = [
+        ("admin@loom.local", "12345678"),
         ("admin@loom.local", "loom_secure_password"),
         ("test@test.com", "1234567890")
     ]
