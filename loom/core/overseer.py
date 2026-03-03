@@ -634,6 +634,11 @@ A step-by-step description of a specific interaction (e.g., "The user drags the 
                         self.state.inspiration_mode = "logic"
                     elif "REFINEMENT" in req_design_str:
                         self.state.inspiration_mode = "refinement"
+                
+                # CRITICAL: Force DESIGN mode on first iteration
+                if self.state.current_iteration <= 1:
+                    self.state.inspiration_requires_design = True
+                    self.state.inspiration_mode = "design"
                         
                 if "[TEST_SCENARIO]" in raw_response:
                     self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].split("[")[0].strip().lstrip(",: ").strip()
@@ -746,6 +751,11 @@ A step-by-step playwright assertion to prove it works.
                         self.state.inspiration_mode = "logic"
                     elif "REFINEMENT" in req_design_str:
                         self.state.inspiration_mode = "refinement"
+                
+                # CRITICAL: Force DESIGN mode on Iteration 1 to ensure 5-5-5 pass
+                if self.state.current_iteration <= 1:
+                    self.state.inspiration_requires_design = True
+                    self.state.inspiration_mode = "design"
 
                 if "[TEST_SCENARIO]" in next_idea:
                     self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].split("[")[0].strip().lstrip(",: ").strip()
