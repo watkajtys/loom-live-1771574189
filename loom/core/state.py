@@ -8,10 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 logger = logging.getLogger("loom")
-
-# Allow isolated state directories for multiplexed studio
-STATE_DIR = Path(os.getenv("LOOM_STATE_DIR", "."))
-STATE_FILE = STATE_DIR / "session_state.json"
+STATE_FILE = Path("session_state.json")
 
 class AttemptRecord(BaseModel):
     attempt_number: int

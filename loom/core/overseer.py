@@ -64,9 +64,8 @@ class Overseer:
         self.patch_dest_rel = None
         
         # Long-term memory
-        from loom.core.state import STATE_DIR
         self.lab_memory = {}
-        memory_path = STATE_DIR / "loom_memory.json"
+        memory_path = Path("loom_memory.json")
         if memory_path.exists() and memory_path.is_dir():
             shutil.rmtree(memory_path)
             
