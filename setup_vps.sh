@@ -19,7 +19,7 @@ if ! [ -x "$(command -v docker)" ]; then
     ID=$(grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
     CODENAME=$(grep "^VERSION_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
     
-    curl -fsSL https://download.docker.com/linux/$ID/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    curl -fsSL https://download.docker.com/linux/$ID/gpg | gpg --dearmor --batch --yes -o /etc/apt/keyrings/docker.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$ID $CODENAME stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
     
     apt-get update
