@@ -9,6 +9,7 @@ import json
 import random
 from enum import Enum
 from datetime import datetime
+from pathlib import Path
 
 import google.generativeai as genai
 from dotenv import load_dotenv
