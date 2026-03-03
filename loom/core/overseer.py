@@ -310,7 +310,7 @@ FULL CODEBASE:
             "version": "0.0.0",
             "type": "module",
             "scripts": {
-                "dev": "vite",
+                "dev": "vite --host",
                 "build": "vite build",
                 "lint": "eslint .",
                 "preview": "vite preview",
