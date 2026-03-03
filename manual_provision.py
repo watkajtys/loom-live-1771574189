@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-PB_URL = "http://localhost:8090"
+PB_URL = "http://loom-pocketbase:8090"
 EMAIL = "admin@loom.local"
 PASS = "loom_secure_password"
 
