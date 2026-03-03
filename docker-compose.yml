@@ -1,31 +1,58 @@
 version: '3.8'
 
 services:
-  # The primary instance of Loom
-  loom-main:
+  # --- POD ALPHA ---
+  loom-alpha:
     build: .
-    container_name: loom-main
+    container_name: loom-alpha
     volumes:
-      - .:/app
+      - ./alpha:/app
       - /var/run/docker.sock:/var/run/docker.sock
-    env_file: .env
+    env_file: .env.alpha
     ports:
       - "8080:8080"
+    environment:
+      - PB_HOSTNAME=pb-alpha
     restart: unless-stopped
     depends_on:
-      - pocketbase
+      - pb-alpha
 
-  # PocketBase Backend (The "Data Soul")
-  pocketbase:
+  pb-alpha:
     image: ghcr.io/muchobien/pocketbase:latest
-    container_name: loom-pocketbase
+    container_name: pb-alpha
     command:
       - serve
       - --http=0.0.0.0:8090
     volumes:
-      - ./pb_data:/pb_data
-      - ./pb_public:/pb_public
-      - ./pb_hooks:/pb_hooks
+      - ./alpha/pb_data:/pb_data
     ports:
       - "8090:8090"
+    restart: unless-stopped
+
+  # --- POD BETA ---
+  loom-beta:
+    build: .
+    container_name: loom-beta
+    volumes:
+      - ./beta:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file: .env.beta
+    ports:
+      - "8081:8080"
+    environment:
+      - PB_HOSTNAME=pb-beta
+    restart: unless-stopped
+    depends_on:
+      - pb-beta
+
+  pb-beta:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: pb-beta
+    command:
+      - serve
+      - --http=0.0.0.0:8090
+    volumes:
+      - ./beta/pb_data:/pb_data
+    ports:
+      - "8091:8090"
     restart: unless-stopped

@@ -25,30 +25,30 @@ from datetime import datetime
 
 logger = logging.getLogger("loom")
 
-def db_doctor():
+def db_doctor(pb_host="loom-pocketbase"):
     """Ensures PocketBase superuser exists, waiting for container to be ready."""
     import subprocess
     import time
-    logger.info("Configuring PocketBase Superuser...")
+    logger.info(f"Configuring PocketBase Superuser on {pb_host}...")
     
     max_retries = 15
     for i in range(max_retries):
         try:
             # First, check if the container is even running and responding to CLI
-            check_cmd = ["docker", "exec", "loom-pocketbase", "pocketbase", "--version"]
+            check_cmd = ["docker", "exec", pb_host, "pocketbase", "--version"]
             result = subprocess.run(check_cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 # Container is ready for CLI commands
-                cmd = ["docker", "exec", "loom-pocketbase", "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
+                cmd = ["docker", "exec", pb_host, "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
                 subprocess.run(cmd, check=True, capture_output=True)
-                logger.info("PocketBase Superuser configured successfully.")
+                logger.info(f"PocketBase Superuser configured successfully on {pb_host}.")
                 return True
         except Exception as e:
             if i == max_retries - 1:
-                logger.error(f"Failed to configure PocketBase superuser after {max_retries} attempts: {e}")
+                logger.error(f"Failed to configure PocketBase superuser on {pb_host} after {max_retries} attempts: {e}")
                 return False
         
-        logger.info(f"Waiting for PocketBase container to stabilize (Attempt {i+1}/{max_retries})...")
+        logger.info(f"Waiting for {pb_host} container to stabilize (Attempt {i+1}/{max_retries})...")
         time.sleep(2)
     return False
 
@@ -119,6 +119,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Start the Loom autonomous software factory.")
     parser.add_argument("--clean", action="store_true", help="Perform a full system clean slate before starting.")
     parser.add_argument("--mock", action="store_true", help="Use local Mock Jules (Gemini) instead of official API.")
+    
+    # Seeding arguments
+    parser.add_argument("--name", type=str, help="Initial project name.")
+    parser.add_argument("--goal", type=str, help="Initial inspiration goal.")
+    parser.add_argument("--data-model", type=str, help="Initial PocketBase data model.")
+    
     args = parser.parse_args()
 
     if args.mock:
@@ -128,14 +134,26 @@ if __name__ == "__main__":
     state_handler = StateLogHandler()
     logger.addHandler(state_handler)
     
+    # PocketBase hostname from environment
+    pb_host = os.getenv("PB_HOSTNAME", "loom-pocketbase")
+    
     # Doctor check before anything else
-    if not git_doctor() or not db_doctor() or not doctor():
+    if not git_doctor() or not db_doctor(pb_host) or not doctor():
         import sys
         sys.exit(1)
         
     if args.clean:
         clean_slate()
     
+    # Seed the state if arguments provided
+    if args.name or args.goal or args.data_model:
+        state = ConductorState.load()
+        if args.name: state.project_name = args.name
+        if args.goal: state.inspiration_goal = args.goal
+        if args.data_model: state.inspiration_data_model = args.data_model
+        state.save()
+        logger.info(f"Seeded project state: Name={args.name}, Goal={args.goal}")
+
     # Start the Dashboard Viewer server in the background
     viewer_thread = threading.Thread(target=start_viewer_server, daemon=True)
     viewer_thread.start()
