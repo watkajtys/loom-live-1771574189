@@ -169,3 +169,30 @@ To prevent design drift over multiple iterations, Loom will generate a foundatio
 *   **The Janitor:** A garbage collection agent that runs periodically to find and delete unused React components and dead code via tools like `ts-prune`.
 *   **The AppSec Reviewer:** Scans patches exclusively for XSS vectors, insecure local storage, and hardcoded secrets.
 
+---
+
+## 11. The Studio Era (Loom 2.0)
+
+We are evolving from an "App Builder" into a "Multiplexed Product Studio." This phase focuses on making the apps "real" (Persistence) and "live" (Shared Hosting).
+
+### A. Persistent Persistence (PocketBase)
+Apps are no longer ephemeral frontends. Every Loom project now has a "Data Soul."
+*   **Zero-Key Automation:** Instead of relying on manual Firebase setup, the Overseer autonomously spins up a PocketBase instance as a Docker sidecar for every app.
+*   **Data Model Phase:** The Overseer defines a `[DATA_MODEL]` (collections/fields) during Inspiration and generates a `pb_schema.json`.
+*   **Full-Stack Pods:** The output is a self-contained unit: a Vite React app communicating directly with its own local PocketBase instance.
+
+### B. Shared Studio Hosting (Hetzner)
+Moving away from dedicated VPS instances to a cost-effective shared model.
+*   **Reverse Proxy Automation:** The agent manages a central Nginx instance on a single Hetzner box.
+*   **Subdomain Logic:** New projects are automatically deployed to `project-name.studio-domain.com`.
+*   **Docker Sandboxing:** Use `docker-compose.yml` to manage the multi-container pod (React + PocketBase) for each project.
+
+### C. Agentic QA (Interactive Verification)
+Replacing static screenshots with a "Living" verification loop.
+*   **Browser Agent:** The Overseer can "drive" a Playwright browser instance to click buttons, fill forms, and verify state transitions.
+*   **Happiness 2.0:** The score is now a composite of Visual Fidelity (Flash), Architectural Integrity (Flash), and **Functional Success** (Playwright Agent).
+
+### D. Operational Efficiency
+*   **Model Tiering:** Use Gemini 3.1 Pro for high-level "Brain" tasks and Gemini 3 Flash for high-volume "Reviewer" tasks.
+*   **Stable References:** Implementation of the `REFINEMENT` mode to prevent design drift once a UI is established.
+

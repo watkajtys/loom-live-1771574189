@@ -8,22 +8,35 @@ services:
     volumes:
       # Map the memory to keep it across restarts
       - ./loom_memory.json:/app/loom_memory.json
-      # Map session_state.json so the host can see it easily
+      # Map session_state.json so the host can see it easily      
       - ./session_state.json:/app/session_state.json
       # Map archive and viewer artifacts
       - ./archive:/app/archive
-      - ./viewer/public/artifacts:/app/viewer/public/artifacts
+      - ./viewer/public/artifacts:/app/viewer/public/artifacts    
       # Map the app directory if you want to see/edit code from host
       - ./app:/app/app
     env_file: .env
     ports:
       - "8080:8080"
     restart: unless-stopped
-    # Use a specific CMD if you want to pass flags
-    # command: python main.py --clean
+    depends_on:
+      - pocketbase
+
+  # PocketBase Backend (The "Data Soul")
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: loom-pocketbase
+    volumes:
+      - ./pb_data:/pb_data
+      - ./pb_public:/pb_public
+      - ./pb_hooks:/pb_hooks
+    ports:
+      - "8090:8090"
+    restart: unless-stopped
 
   # Example of a second instance (e.g. for a different project)
-  # Duplicate this block and change volumes/ports to run multiple
+  # Duplicate this block and change volumes/ports to run multiple 
+
   # loom-2:
   #   build: .
   #   container_name: loom-2

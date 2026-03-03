@@ -75,7 +75,11 @@ class Overseer:
             logger.warning("GEMINI_API_KEY not found. Overseer will be lobotomized.")
         else:
             genai.configure(api_key=api_key)
+            # Principal Overseer (Logic & Planning)
             self.model = genai.GenerativeModel('gemini-3.1-pro-preview')
+            # Specialized Reviewers (Fast & Efficient)
+            self.arch_model = genai.GenerativeModel('gemini-3-flash-preview')
+            self.vision_model = genai.GenerativeModel('gemini-3-flash-preview')
 
     def think(self, context: str, image_data: bytes = None, temperature: float = 0.7) -> str:
         """Consults the LLM for the next move with a hidden nonce to avoid caching."""
@@ -161,8 +165,8 @@ Finally, give the architecture a score from 1 to 10. Output ONLY the integer sco
 FULL CODEBASE:
 {source_code}
 """
-            review_response = self.think(prompt)
-            review_text = review_response.strip()
+            review_response = self.arch_model.generate_content(prompt)
+            review_text = review_response.text.strip()
             logger.info(f"Architectural Critique:\n{review_text}")
             
             lines = [l.strip() for l in review_text.split('\n') if l.strip()]
@@ -234,7 +238,7 @@ FULL CODEBASE:
                         logs_str = "\n".join(console_logs[:20]) # Limit to 20 lines
                         prompt.append(f"\nCRITICAL: The browser console reported the following logs/errors. Factor these heavily into your score and critique:\n{logs_str}")
 
-                    response = self.model.generate_content([*prompt, *content])
+                    response = self.vision_model.generate_content([*prompt, *content])
                     critique = response.text.strip()
                     logger.info(f"Vision Critique:\n{critique}")
                     
@@ -316,7 +320,8 @@ FULL CODEBASE:
                 "react": "^19.0.0",
                 "react-dom": "^19.0.0",
                 "react-router-dom": "^7.0.0",
-                "lucide-react": "^0.454.0"
+                "lucide-react": "^0.454.0",
+                "pocketbase": "^0.21.1"
             },
             "devDependencies": {
                 "@playwright/test": "^1.42.0",
@@ -522,43 +527,46 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
                 prompt = f"""
-You are the Creative Director of a Boutique Consumer Product Studio. 
-Your goal is to identify a small, recurring "Human Annoyance" in daily life and invent a beautiful, single-purpose web application (Micro-SaaS) to solve it.
+You are a Principal Product Architect at an elite R&D laboratory. 
+Your goal is to identify a high-leverage utility or a novel digital tool and invent a functional, high-quality web application to realize it.
 
 [Studio Entropy Seed: {entropy_seed}]
 {past_history}
 
 CRITICAL DIRECTIVES:
-1. **SENSORY SIMPLICITY:** The product should do ONE thing with extreme elegance. It should feel like a "Haven" or a "Daily Ritual," not a chore.
-2. **HUMAN-CENTERED:** Avoid all "Power-User" or "Industrial" mechanics. Do not build dashboards, instruments, or command centers. 
-3. **BANNED CATEGORIES:** No DevTools, no B2B analytics, no engineering utilities, no crypto, no complex "platforms."
-4. **ALLOWED THEMES:** Wellness, Mindset, Parenting, Travel, Reading, Gardening, Home Rituals, Niche Hobbies.
+1. **FUNCTIONAL DEPTH:** Move beyond simple "reflection" or "mindset" apps. The product should have clear utility, interactive state, and solve a specific functional problem.
+2. **BROAD SPECTRUM:** You are authorized to build across the entire spectrum: from elegant consumer utilities to high-performance professional tools, dashboards, and creative sandboxes.
+3. **AVOID REPETITION:** Do NOT use the phrasing "The architecture of this application is an exercise in..." or focus exclusively on "emotional release." We have enough of those.
+4. **ALLOWED THEMES:** Data Visualization, Productivity, Creative Tools, Professional Utilities, Smart Home, Finance, Wellness, or Niche Hobby Management.
 
 ### YOUR TASK:
-1. Brainstorm 5 wildly different Consumer Micro-SaaS concepts. 
-2. For each idea, define the "Daily Ritual" it improves and the "Sensory Metaphor" (e.g. The Sanctuary, The Journal, The Compass, The Gallery).
-3. Select the concept that feels the most "Human" and "Indispensable."
+1. Brainstorm 5 wildly different application concepts. 
+2. For each idea, define the "Core Loop" (the primary recurring action the user takes) and the "Functional Edge" (why this tool is better than a generic alternative).
+3. Select the concept that feels the most "Useful" and "Structurally Interesting."
 
-CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS SOUL.
+CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS ARCHITECTURE.
 
 4. Output your choice using the following structured tags:
 
 [SELECTED CONCEPT]
-A detailed paragraph describing the app's architecture and the emotional UX flow. 
+A detailed paragraph describing the app's architecture, core features, and the primary user flow.
 
 [APP_META]
-Name: [A beautiful, 1-2 word name for the product]
+Name: [A clear, strong name for the product]
 Palette: [A sensory description of the colors]
 Typography: [The vibe of the font]
 
+[DATA_MODEL]
+Define the Firestore schema (collections, documents, and fields) required to make this app persistent. Include Auth requirements if any.
+
 [TARGET_ROUTE]
-The URL path where the core experience will live (e.g. /haven)
+The URL path where the core experience will live (e.g. /dashboard, /editor, /viewer)
 
 [REQUIRES_DESIGN]
-TRUE or FALSE
+TRUE, FALSE, or REFINEMENT
 
 [TEST_SCENARIO]
-A simple, step-by-step description of how a person would use this to solve their annoyance.
+A step-by-step description of a specific user interaction to verify the core logic.
 """
                 raw_response = self.think(prompt, temperature=0.9)
                 logger.info(f"Studio Brainstorming Output:\n{raw_response}")
@@ -577,17 +585,24 @@ A simple, step-by-step description of how a person would use this to solve their
 
                 if "[TARGET_ROUTE]" in raw_response:
                     self.state.inspiration_target_route = raw_response.split("[TARGET_ROUTE]")[1].split("[")[0].strip().lstrip(",: ").strip()
+                
+                if "[DATA_MODEL]" in raw_response:
+                    self.state.inspiration_data_model = raw_response.split("[DATA_MODEL]")[1].split("[")[0].strip().lstrip(",: ").strip()
                     
                 self.state.inspiration_requires_design = True
+                self.state.inspiration_mode = "design"
                 if "[REQUIRES_DESIGN]" in raw_response:
                     req_design_str = raw_response.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
                     if "FALSE" in req_design_str:
                         self.state.inspiration_requires_design = False
+                        self.state.inspiration_mode = "logic"
+                    elif "REFINEMENT" in req_design_str:
+                        self.state.inspiration_mode = "refinement"
                         
                 if "[TEST_SCENARIO]" in raw_response:
                     self.state.inspiration_test_scenario = raw_response.split("[TEST_SCENARIO]")[1].split("[")[0].strip().lstrip(",: ").strip()
                     
-                logger.info(f"New Goal: {self.state.inspiration_goal} (Requires Design: {self.state.inspiration_requires_design})")
+                logger.info(f"New Goal: {self.state.inspiration_goal} (Mode: {self.state.inspiration_mode})")
                 
                 # Persist this new project to the long-term archive
                 self._save_to_lab_memory()
@@ -659,10 +674,13 @@ The specific engineering/design goal for the next iteration based on the Phase.
 The URL path (e.g. /settings)
 
 [REQUIRES_DESIGN]
-TRUE or FALSE (e.g., wiring up localStorage is FALSE, adding a Pricing page is TRUE)
+TRUE, FALSE, or REFINEMENT (Use REFINEMENT if the goal is fixing CSS/UI to match current assets)
 
 [TEST_SCENARIO]
 A step-by-step playwright assertion to prove it works.
+
+[DATA_MODEL]
+(Optional) Update the Firestore schema if new data structures are required.
 
 [APP_META]
 (Optional) If you are updating the product identity (e.g. Phase 3 Polish), provide the updated Name, Palette, and Typography. Otherwise, omit this tag.
@@ -679,8 +697,20 @@ A step-by-step playwright assertion to prove it works.
                     self.state.inspiration_goal = next_idea.split("[SELECTED CONCEPT]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[TARGET_ROUTE]" in next_idea:
                     self.state.inspiration_target_route = next_idea.split("[TARGET_ROUTE]")[1].split("[")[0].strip().lstrip(",: ").strip()
+                
+                if "[DATA_MODEL]" in next_idea:
+                    self.state.inspiration_data_model = next_idea.split("[DATA_MODEL]")[1].split("[")[0].strip().lstrip(",: ").strip()
+                
+                self.state.inspiration_requires_design = True
+                self.state.inspiration_mode = "design"
                 if "[REQUIRES_DESIGN]" in next_idea:
-                    self.state.inspiration_requires_design = "FALSE" not in next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                    req_design_str = next_idea.split("[REQUIRES_DESIGN]")[1].split("[")[0].strip().upper()
+                    if "FALSE" in req_design_str:
+                        self.state.inspiration_requires_design = False
+                        self.state.inspiration_mode = "logic"
+                    elif "REFINEMENT" in req_design_str:
+                        self.state.inspiration_mode = "refinement"
+
                 if "[TEST_SCENARIO]" in next_idea:
                     self.state.inspiration_test_scenario = next_idea.split("[TEST_SCENARIO]")[1].split("[")[0].strip().lstrip(",: ").strip()
                 if "[APP_META]" in next_idea:
@@ -698,6 +728,7 @@ A step-by-step playwright assertion to prove it works.
             timestamp=str(datetime.now()),
             goal=self.state.inspiration_goal,
             target_route=self.state.inspiration_target_route,
+            data_model=self.state.inspiration_data_model,
             requires_design=self.state.inspiration_requires_design,
             test_scenario=self.state.inspiration_test_scenario,
             negative_history=[h.goal for h in self.state.history[-5:] if h.goal],
@@ -744,8 +775,12 @@ A step-by-step playwright assertion to prove it works.
             logger.warning(f"Failed to save to loom_memory.json: {e}")
 
     def _step_design(self):
-        if not self.state.inspiration_requires_design:
-            logger.info("Skipping Stitch design phase as REQUIRES_DESIGN is False.")
+        if self.state.inspiration_mode == "logic":
+            logger.info("Skipping Stitch design phase as inspiration_mode is logic.")
+            return
+
+        if self.state.inspiration_mode == "refinement":
+            logger.info("Preserving existing design assets for refinement pass.")
             return
 
         self.state.current_phase = LoomPhase.DESIGN.value
@@ -753,11 +788,14 @@ A step-by-step playwright assertion to prove it works.
 
         # ITERATION 2+ (EVOLUTION)
         if self.state.current_iteration > 1 and getattr(self.state, 'stitch_project_id', None):
-            logger.info(f"Iteration {self.state.current_iteration}: Designing new feature in existing project...")
-            self.state.current_status = f"Designing new feature in existing project..."
+            logger.info(f"Iteration {self.state.current_iteration}: Designing {self.state.inspiration_mode} pass for project...")
+            self.state.current_status = f"Designing {self.state.inspiration_mode} pass in existing project..."
             self.state.save()
             
-            prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.state.inspiration_target_route}. Please design the UI for this feature. Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
+            if self.state.inspiration_mode == "design":
+                prompt = f"We are adding a new feature: '{self.state.inspiration_goal}'. This feature is part of the flow at: {self.state.inspiration_target_route}. Please design the UI for this feature. Maintain the established navigation, theme, and visual identity of the project: {self.state.app_meta}."
+            else:
+                prompt = f"We are refining the existing UI and logic for: '{self.state.inspiration_goal}'. Target route: {self.state.inspiration_target_route}. Please update the design to be more polished and consistent with the core identity: {self.state.app_meta}."
             
             screen_id = getattr(self.state, 'stitch_screen_id', None)
             screens = self.stitch.generate_or_edit_screen(
@@ -1199,42 +1237,65 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
 
         if attempt == 1:
-            if self.state.inspiration_requires_design:
+            data_model_context = f"\nData Model (PocketBase Schema):\n{self.state.inspiration_data_model}\n" if self.state.inspiration_data_model else ""
+            if self.state.inspiration_mode == "design":
                 return f"""
 Implement the design for '{self.state.inspiration_goal}'.
 App Identity: {self.state.app_meta}
 Target Route: {self.state.inspiration_target_route}
+{data_model_context}
 {memory_context}
 
 The design files are in app/design. 
 CRITICAL RULES:
 1. Integrate this new feature into the existing application natively using the established design system (Tailwind classes, layout, components).
 2. The target flow/location is: '{self.state.inspiration_target_route}'. If this requires a new page, set up React Router without breaking existing pages AND add a visible link to it in the main app navigation so the user can reach it. If it is a modal/overlay, integrate it cleanly into the current view.
-3. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).
-4. You MUST append a new Playwright integration test block (`test('...', async ({{ page }}) => {{...}})`) to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
-5. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
+3. If a Data Model is provided above, you MUST use the `pocketbase` npm package to make the application state persistent. Assume the PocketBase server is running locally at `http://127.0.0.1:8090`. Initialize the client and provide a clean API or hook for the UI to interact with.
+4. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).
+5. You MUST append a new Playwright integration test block (`test('...', async ({{ page }}) => {{...}})`) to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
+6. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
+"""
+            elif self.state.inspiration_mode == "refinement":
+                return f"""
+Refine the implementation of '{self.state.inspiration_goal}'.
+App Identity: {self.state.app_meta}
+Target Route: {self.state.inspiration_target_route}
+{data_model_context}
+{memory_context}
+
+The design is LOCKED. Do NOT expect new design assets. Your task is to refine the existing CSS, layout, and logic to better match the current files in `app/design` and fix any discrepancies.
+
+CRITICAL RULES:
+1. Focus on visual and functional refinement of the existing '{self.state.inspiration_target_route}' route.
+2. If a Data Model is provided, ensure the PocketBase persistence logic is robust and correctly reflects the schema.
+3. You MUST update the Playwright integration test in `app/tests/verify.spec.ts` to ensure it continues to pass with these refinements.
+4. CRITICAL: At the end of the test, you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`.
 """
             else:
                 return f"""
 Implement the following architectural/logic feature: '{self.state.inspiration_goal}'.
 App Identity: {self.state.app_meta}
 Target Route: {self.state.inspiration_target_route}
+{data_model_context}
 {memory_context}
 
 CRITICAL RULES:
 1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout.
 2. Focus purely on the underlying React logic, state management, or architecture as requested.
-3. You MUST append a new Playwright integration test block to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
-4. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`."""
+3. If a Data Model is provided, you MUST implement the corresponding persistence logic using the `pocketbase` SDK connecting to `http://127.0.0.1:8090`.
+4. You MUST append a new Playwright integration test block to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
+5. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`."""
         else:
             past_critiques = ""
             if self.current_iteration_record and self.current_iteration_record.attempts:     
                 last_att = self.current_iteration_record.attempts[-1]
                 past_critiques += f"\nPrevious Attempt {last_att.attempt_number} (Score: {last_att.score}/10) Critique:\n{last_att.critique}\n"
             
+            data_model_context = f"\nData Model (PocketBase Schema):\n{self.state.inspiration_data_model}\n" if self.state.inspiration_data_model else ""
             return f"""Refine the implementation. 
 Meta: {self.state.app_meta}. 
 Route: {self.state.inspiration_target_route}. 
+{data_model_context}
 {memory_context}
 
 CRITICAL RULES:

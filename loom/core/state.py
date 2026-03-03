@@ -23,6 +23,7 @@ class LoopIteration(BaseModel):
     timestamp: str
     goal: str
     target_route: str = "/"
+    data_model: Optional[str] = None
     requires_design: bool = True
     test_scenario: Optional[str] = None
     negative_history: List[str] = []
@@ -56,7 +57,9 @@ class ConductorState(BaseModel):
     active_branch: str = "main"
     inspiration_goal: str = ""
     inspiration_target_route: str = "/"
+    inspiration_data_model: Optional[str] = None
     inspiration_requires_design: bool = True
+    inspiration_mode: str = "design"  # "design", "refinement", "logic"
     inspiration_test_scenario: str = ""
     history: List[LoopIteration] = []
     stitch_project_id: Optional[str] = None
