@@ -18,6 +18,9 @@ services:
   pocketbase:
     image: ghcr.io/muchobien/pocketbase:latest
     container_name: loom-pocketbase
+    command:
+      - serve
+      - --http=0.0.0.0:8090
     volumes:
       - ./pb_data:/pb_data
       - ./pb_public:/pb_public

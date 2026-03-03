@@ -39,6 +39,9 @@ class Overseer:
         self.state = ConductorState.load()
         self.git = GitClient()
         
+        # Use service name for PocketBase inside Docker
+        self.pb_url = "http://pocketbase:8090"
+        
         # Use Mock Jules if requested
         if os.getenv("USE_MOCK_JULES", "").lower() == "true":
             logger.info("[bold yellow]Using Mock Jules Client (Local Gemini)[/bold yellow]", extra={"markup": True})
@@ -1209,7 +1212,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             
             try:
                 from loom.environment.pocketbase import DatabaseProvisioner
-                provisioner = DatabaseProvisioner()
+                provisioner = DatabaseProvisioner(pb_url=self.pb_url)
                 
                 # Ask LLM to translate plain text data model to PocketBase JSON Schema
                 schema_prompt = f"""
@@ -1307,7 +1310,7 @@ The design files are in app/design.
 CRITICAL RULES:
 1. Integrate this new feature into the existing application natively using the established design system (Tailwind classes, layout, components).
 2. The target flow/location is: '{self.state.inspiration_target_route}'. If this requires a new page, set up React Router without breaking existing pages AND add a visible link to it in the main app navigation so the user can reach it. If it is a modal/overlay, integrate it cleanly into the current view.
-3. If a Data Model is provided above, you MUST use the `pocketbase` npm package to make the application state persistent. Assume the PocketBase server is running locally at `http://127.0.0.1:8090`. Initialize the client and provide a clean API or hook for the UI to interact with.
+3. If a Data Model is provided above, you MUST use the `pocketbase` npm package to make the application state persistent. Assume the PocketBase server is running on port 8090 of the same host as the application. Initialize the client using `new PocketBase(window.location.protocol + "//" + window.location.hostname + ":8090")`. Provide a clean API or hook for the UI to interact with.
 4. All new UI states, overlays, drawers, or modals MUST be deep-linkable and controllable via URL search parameters (e.g., `/?view=settings` or `/?modal=library`).
 5. You MUST append a new Playwright integration test block (`test('...', async ({{ page }}) => {{...}})`) to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
 6. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`. This image is required to prove the feature works visually.
@@ -1339,7 +1342,7 @@ Target Route: {self.state.inspiration_target_route}
 CRITICAL RULES:
 1. This is a LOGIC ONLY update. Do NOT alter the visual design, CSS, or layout.
 2. Focus purely on the underlying React logic, state management, or architecture as requested.
-3. If a Data Model is provided, you MUST implement the corresponding persistence logic using the `pocketbase` SDK connecting to `http://127.0.0.1:8090`.
+3. If a Data Model is provided, you MUST implement the corresponding persistence logic using the `pocketbase` SDK connecting to port 8090 of the current host (`window.location.hostname`).
 4. You MUST append a new Playwright integration test block to `app/tests/verify.spec.ts` that implements this exact verification scenario: "{self.state.inspiration_test_scenario}". Do NOT delete existing tests.
 5. CRITICAL: At the end of your newly added test (after the assertions pass), you MUST take a screenshot of the active feature using `await page.screenshot({{ path: 'evidence.png' }});`."""
         else:
