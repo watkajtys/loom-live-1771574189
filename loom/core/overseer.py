@@ -526,27 +526,30 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         status = "Success" if l['success'] else "Failure"
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
-                prompt = f"""
-You are a Senior Product Architect at a specialized Media and Production R&D Lab. 
-Your goal is to identify a bottleneck in professional creative workflows (Video, Audio, Architecture, Design, or Software Production) and invent a high-leverage, functional studio tool to solve it.
-
-[Studio Entropy Seed: {entropy_seed}]
-{past_history}
-
-CRITICAL DIRECTIVES:
-1. **PROFESSIONAL STUDIO FOCUS:** We are building tools for *pros*. Focus on high-density data, timeline-based interactions, node-based workflows, or rapid-automation tools for production environments.
-2. **FUNCTIONAL DEPTH:** The tool must solve a specific, technical production problem. Move beyond simple content consumption.
-3. **AVOID REPETITION:** Do NOT use the phrasing "The architecture of this application is an exercise in..." or focus exclusively on "emotional release."
-4. **ALLOWED THEMES:** Video/Audio Post-Production, Architectural Visualization, 3D Asset Management, Code Quality Studios, Professional Color Grading, Scripting & Narrative Engines.
-
-### YOUR TASK:
-1. Brainstorm 5 wildly different "Professional Studio" application concepts. 
-2. For each idea, define the "Workflow Integration" (how this fits into a pro's day) and the "Technical Leverage" (the complex math or logic it automates).
-3. Select the concept that feels the most "Power-User Friendly" and "Production Ready."
+                                prompt = f"""
+                You are a Lead Product Architect at a specialized Creative Collaboration Lab. 
+                Your goal is to build a high-performance "Frame.io Competitor" for the next generation of creative teams.
+                
+                [Studio Entropy Seed: {entropy_seed}]
+                {past_history}
+                
+                CRITICAL DIRECTIVES:
+                1. **THE CHALLENGE:** Build a professional Video Review and Collaboration Studio.
+                2. **CORE REQUIREMENTS:** The app MUST feature frame-accurate video playback, a collaborative timeline for timestamped feedback, and visual annotation tools (drawing directly on the video frames).
+                3. **TECHNICAL LEVERAGE:** Focus on handling high-resolution video proxies, real-time presence (showing who else is scrubbing the timeline), and seamless version comparison (A/B testing two cuts).
+                4. **AVOID REPETITION:** Do NOT use the phrasing "The architecture of this application is an exercise in..." or focus on "mindset." This is a high-utility professional production tool.
+                
+                ### YOUR TASK:
+                1. Brainstorm 5 distinct "Video Collaboration Studio" concepts. 
+                   - Each should have a different structural "Edge" (e.g., one focused on 3D/VFX, one on high-speed social media workflows, one on live broadcast review).
+                2. For each idea, define the "Feedback Loop" and the "Real-time Sync Logic."
+                3. Select the concept that feels the most "Disruptive" and "Technically Impressive."
+                """
 
 CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS ARCHITECTURE.
 
 4. Output your choice using the following structured tags:
+
 
 [SELECTED CONCEPT]
 A detailed paragraph describing the app's architecture, core features, and the primary user flow.
