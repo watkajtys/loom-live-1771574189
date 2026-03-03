@@ -16,7 +16,7 @@ services:
 
   # PocketBase Backend (The "Data Soul")
   pocketbase:
-    image: ghcr.io/muchobien/pocketbase:latest
+    image: pocketbase/pocketbase:latest
     container_name: loom-pocketbase
     command:
       - serve
