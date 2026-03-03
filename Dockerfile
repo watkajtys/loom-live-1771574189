@@ -43,10 +43,6 @@ RUN playwright install chromium --with-deps
 # Copy the project files
 COPY . .
 
-# Install app dependencies (the React project)
-# Note: We assume the 'app' directory exists and is a Vite project
-RUN if [ -d "app" ]; then cd app && npm install; fi
-
 # Expose the dashboard port
 EXPOSE 8080
 
