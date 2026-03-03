@@ -12,7 +12,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - PB_HOSTNAME=pocketbase
+      - PB_HOSTNAME=loom-pocketbase
     restart: unless-stopped
     depends_on:
       - pocketbase
@@ -21,6 +21,10 @@ services:
   pocketbase:
     image: ghcr.io/muchobien/pocketbase:latest
     container_name: loom-pocketbase
+    networks:
+      default:
+        aliases:
+          - pocketbase
     command:
       - serve
       - --http=0.0.0.0:8090
