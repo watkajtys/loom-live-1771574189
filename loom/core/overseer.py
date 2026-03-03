@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 
 import google.generativeai as genai
+from google.api_core import exceptions
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from dotenv import load_dotenv
 
 from loom.core.state import ConductorState, LoopIteration, AttemptRecord
@@ -93,6 +95,25 @@ class Overseer:
             self.arch_model = genai.GenerativeModel('gemini-3-flash-preview')
             self.vision_model = genai.GenerativeModel('gemini-3-flash-preview')
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+        retry=(
+            retry_if_exception_type(exceptions.DeadlineExceeded) |
+            retry_if_exception_type(exceptions.ServiceUnavailable) |
+            retry_if_exception_type(exceptions.InternalServerError) |
+            retry_if_exception_type(exceptions.ResourceExhausted)
+        ),
+        reraise=True
+    )
+    def _generate_content_with_retry(self, model, content, generation_config=None):
+        """Helper to call Gemini with robust exponential backoff retries."""
+        try:
+            return model.generate_content(content, generation_config=generation_config)
+        except Exception as e:
+            logger.warning(f"Gemini call failed (attempting retry): {e}")
+            raise e
+
     def think(self, context: str, image_data: bytes = None, temperature: float = 0.7) -> str:
         """Consults the LLM for the next move with a hidden nonce to avoid caching."""
         if not hasattr(self, 'model'): return "Mock thought: Proceed."
@@ -104,9 +125,9 @@ class Overseer:
         
         if image_data:
             content = [prompt, {"mime_type": "image/png", "data": image_data}]
-            response = self.model.generate_content(content, generation_config=generation_config)
+            response = self._generate_content_with_retry(self.model, content, generation_config=generation_config)
         else:
-            response = self.model.generate_content(prompt, generation_config=generation_config)
+            response = self._generate_content_with_retry(self.model, prompt, generation_config=generation_config)
         return response.text
 
     def _take_screenshot(self, url_or_path: str, wait_ms: int = 5000, return_logs: bool = False):
@@ -177,7 +198,7 @@ Finally, give the architecture a score from 1 to 10. Output ONLY the integer sco
 FULL CODEBASE:
 {source_code}
 """
-            review_response = self.arch_model.generate_content(prompt)
+            review_response = self._generate_content_with_retry(self.arch_model, prompt)
             review_text = review_response.text.strip()
             logger.info(f"Architectural Critique:\n{review_text}")
             
@@ -250,7 +271,7 @@ FULL CODEBASE:
                         logs_str = "\n".join(console_logs[:20]) # Limit to 20 lines
                         prompt.append(f"\nCRITICAL: The browser console reported the following logs/errors. Factor these heavily into your score and critique:\n{logs_str}")
 
-                    response = self.vision_model.generate_content([*prompt, *content])
+                    response = self._generate_content_with_retry(self.vision_model, [*prompt, *content])
                     critique = response.text.strip()
                     logger.info(f"Vision Critique:\n{critique}")
                     
@@ -1001,7 +1022,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                 content.append({"mime_type": "image/png", "data": var["img"]})
         
         try:
-            review_response = self.model.generate_content([*prompt, *content])
+            review_response = self._generate_content_with_retry(self.model, [*prompt, *content])
             self.current_iteration_record.seed_review_critique = review_response.text.strip()
             
             try:
@@ -1084,7 +1105,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                     layout_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
                 try:
-                    layout_res = self.model.generate_content([*prompt, *layout_content])
+                    layout_res = self._generate_content_with_retry(self.model, [*prompt, *layout_content])
                     self.current_iteration_record.layout_review_critique = layout_res.text.strip()
                     best_l_idx = int(''.join(filter(str.isdigit, layout_res.text.split("\n")[-1]))) - 1
                 except Exception as e:
@@ -1202,7 +1223,7 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
                     theme_content.append({"mime_type": "image/png", "data": var["images"][0]})
                 
                 try:
-                    theme_res = self.model.generate_content([*prompt, *theme_content])
+                    theme_res = self._generate_content_with_retry(self.model, [*prompt, *theme_content])
                     theme_text = theme_res.text.strip()
                     self.current_iteration_record.theme_review_critique = theme_text
                     
@@ -1280,7 +1301,7 @@ Example output:
   }}
 ]
 """
-                schema_json_str = self.model.generate_content(schema_prompt).text.strip()
+                schema_json_str = self._generate_content_with_retry(self.model, schema_prompt).text.strip()
                 # Clean markdown if present
                 schema_json_str = schema_json_str.replace("```json", "").replace("```", "").strip()
                 

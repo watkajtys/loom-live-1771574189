@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import google.generativeai as genai
+from google.api_core import exceptions
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from loom.agents.base import AgentProxy
 
 logger = logging.getLogger("loom")
@@ -18,6 +20,25 @@ class MockJulesClient(AgentProxy):
         else:
             genai.configure(api_key=self.api_key)
             self.model = genai.GenerativeModel('gemini-1.5-pro')
+
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+        retry=(
+            retry_if_exception_type(exceptions.DeadlineExceeded) |
+            retry_if_exception_type(exceptions.ServiceUnavailable) |
+            retry_if_exception_type(exceptions.InternalServerError) |
+            retry_if_exception_type(exceptions.ResourceExhausted)
+        ),
+        reraise=True
+    )
+    def _generate_content_with_retry(self, content):
+        """Helper to call Gemini with robust exponential backoff retries."""
+        try:
+            return self.model.generate_content(content)
+        except Exception as e:
+            logger.warning(f"Mock Jules Gemini call failed (attempting retry): {e}")
+            raise e
 
     def run_task(self, prompt: str, repo_owner: str = None, repo_name: str = None, branch: str = None, activity_callback=None) -> str:
         logger.info(f"Tasking Mock Jules (Gemini): {prompt}")
@@ -76,7 +97,7 @@ Example:
 
         # 3. Call LLM
         try:
-            response = self.model.generate_content(full_prompt)
+            response = self._generate_content_with_retry(full_prompt)
             text = response.text
             
             # 4. Parse JSON
