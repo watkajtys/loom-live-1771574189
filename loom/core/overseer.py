@@ -526,50 +526,53 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                         status = "Success" if l['success'] else "Failure"
                         memory_context += f"- Iteration {l['iteration']} ({status}): {l['takeaways']}\n"
                 
-                                prompt = f"""
-                You are a Lead Product Architect at a specialized Creative Collaboration Lab. 
-                Your goal is to build a high-performance "Frame.io Competitor" for the next generation of creative teams.
-                
-                [Studio Entropy Seed: {entropy_seed}]
-                {past_history}
-                
-                CRITICAL DIRECTIVES:
-                1. **THE CHALLENGE:** Build a professional Video Review and Collaboration Studio.
-                2. **CORE REQUIREMENTS:** The app MUST feature frame-accurate video playback, a collaborative timeline for timestamped feedback, and visual annotation tools (drawing directly on the video frames).
-                3. **TECHNICAL LEVERAGE:** Focus on handling high-resolution video proxies, real-time presence (showing who else is scrubbing the timeline), and seamless version comparison (A/B testing two cuts).
-                4. **AVOID REPETITION:** Do NOT use the phrasing "The architecture of this application is an exercise in..." or focus on "mindset." This is a high-utility professional production tool.
-                
-                ### YOUR TASK:
-                1. Brainstorm 5 distinct "Video Collaboration Studio" concepts. 
-                   - Each should have a different structural "Edge" (e.g., one focused on 3D/VFX, one on high-speed social media workflows, one on live broadcast review).
-                2. For each idea, define the "Feedback Loop" and the "Real-time Sync Logic."
-                3. Select the concept that feels the most "Disruptive" and "Technically Impressive."
-                """
+                prompt = f"""
+You are a Lead Product Architect at a specialized Creative Collaboration Lab. 
+Your goal is to build a high-performance "Frame.io Competitor" for professional creative teams.
+
+[Studio Entropy Seed: {entropy_seed}]
+{past_history}
+
+CRITICAL DIRECTIVES:
+1. **VIDEO STUDIO FOCUS:** Build a professional Video Review and Collaboration Studio.
+2. **CORE REQUIREMENTS:**
+   - **Video Management:** Handling video uploads and high-quality proxy generation.
+   - **Frame-Accuracy:** Frame-accurate video playback and scrubbing.
+   - **Feedback Loop:** A collaborative timeline for timestamped feedback and threaded comments.
+   - **Comparative Analysis:** Tools for side-by-side or overlay comparison of different video versions/cuts.
+   - **Visual Annotations:** Tools for drawing directly on video frames to point out specific issues.
+3. **TECHNICAL LEVERAGE:** Focus on real-time presence (who is watching/scrubbing), seamless state sync via PocketBase, and handling large binary assets efficiently.
+4. **AVOID REPETITION:** Do NOT focus on "mindset" or "rituals." This is a utilitarian professional tool.
+
+### YOUR TASK:
+1. Brainstorm 5 distinct "Video Collaboration Studio" concepts. 
+   - Each should have a different structural "Edge" (e.g., focused on 3D/VFX, social media speed, or live broadcast).
+2. For each idea, define the "Video Logic" (how it handles frames/uploads) and the "Collaboration Engine."
+3. Select the concept that feels the most "Power-User Friendly" and "Technically Disruptive."
 
 CRITICAL: DO NOT describe colors or fonts. Define THE PRODUCT and ITS ARCHITECTURE.
 
 4. Output your choice using the following structured tags:
 
-
 [SELECTED CONCEPT]
-A detailed paragraph describing the app's architecture, core features, and the primary user flow.
+A detailed paragraph describing the app's architecture, core video features, and the primary user flow.
 
 [APP_META]
-Name: [A clear, strong name for the product]
+Name: [A strong name for the product]
 Palette: [A sensory description of the colors]
 Typography: [The vibe of the font]
 
 [DATA_MODEL]
-Define the Firestore schema (collections, documents, and fields) required to make this app persistent. Include Auth requirements if any.
+Define the PocketBase schema (collections, fields) required for video projects, comments, annotations, and versioning.
 
 [TARGET_ROUTE]
-The URL path where the core experience will live (e.g. /dashboard, /editor, /viewer)
+The URL path where the core experience will live (e.g. /studio, /review, /project)
 
 [REQUIRES_DESIGN]
 TRUE, FALSE, or REFINEMENT
 
 [TEST_SCENARIO]
-A step-by-step description of a specific user interaction to verify the core logic.
+A step-by-step description of a specific video review interaction (e.g., "Upload a video, scrub to frame 42, add a comment, and verify it appears on the timeline").
 """
                 raw_response = self.think(prompt, temperature=0.9)
                 logger.info(f"Studio Brainstorming Output:\n{raw_response}")
