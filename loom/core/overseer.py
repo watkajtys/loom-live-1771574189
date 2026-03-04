@@ -92,8 +92,8 @@ class Overseer:
             # Principal Overseer (Logic & Planning)
             self.model = genai.GenerativeModel('gemini-3.1-pro-preview')
             # Specialized Reviewers (Fast & Efficient)
-            self.arch_model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
-            self.vision_model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+            self.arch_model = genai.GenerativeModel('gemini-3-flash-preview')
+            self.vision_model = genai.GenerativeModel('gemini-3-flash-preview')
 
     @retry(
         stop=stop_after_attempt(5),
