@@ -42,6 +42,8 @@ class LoopIteration(BaseModel):
     theme_review_critique: Optional[str] = None
     attempts: List[AttemptRecord] = []
     happiness_score: int = 0  # Final score of this iteration
+    successful_branch: Optional[str] = None
+    abandoned: bool = False
     architectural_critique: Optional[str] = None
     git_commit: Optional[str] = None
 

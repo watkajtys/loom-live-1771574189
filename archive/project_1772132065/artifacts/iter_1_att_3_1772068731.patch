@@ -1,0 +1,227 @@
+diff --git a/playwright-report/index.html b/playwright-report/index.html
+index 6eb57bb..14539ce 100644
+--- a/playwright-report/index.html
++++ b/playwright-report/index.html
+@@ -82,4 +82,4 @@ Error generating stack: `+a.message+`
+     <div id='root'></div>
+   </body>
+ </html>
+-<script id="playwrightReportBase64" type="application/zip">data:application/zip;base64,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</script>
+\ No newline at end of file
++<script id="playwrightReportBase64" type="application/zip">data:application/zip;base64,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</script>
+\ No newline at end of file
+diff --git a/src/components/nightstand/Nightstand.tsx b/src/components/nightstand/Nightstand.tsx
+index 9c53725..6ae3b89 100644
+--- a/src/components/nightstand/Nightstand.tsx
++++ b/src/components/nightstand/Nightstand.tsx
+@@ -1,13 +1,16 @@
+ import React, { useState } from 'react';
+-import { motion, AnimatePresence } from 'framer-motion';
++import { motion } from 'framer-motion';
++import { useSearchParams } from 'react-router-dom';
+ 
+ const Nightstand = () => {
++  const [searchParams, setSearchParams] = useSearchParams();
+   const [thought, setThought] = useState('');
+-  const [isSubmitted, setIsSubmitted] = useState(false);
++  
++  const isSubmitted = searchParams.get('state') === 'rested';
+ 
+   const handleRest = () => {
+     if (thought.trim()) {
+-      setIsSubmitted(true);
++      setSearchParams({ state: 'rested' });
+     }
+   };
+ 
+@@ -19,7 +22,10 @@ const Nightstand = () => {
+   };
+ 
+   return (
+-    <div className="bg-midnight text-slate-300 min-h-screen flex flex-col font-serif antialiased overflow-hidden relative selection:bg-white/10 selection:text-slate-200">
++    <div 
++      className="w-full bg-midnight text-slate-300 min-h-screen flex flex-col font-serif antialiased overflow-hidden relative selection:bg-white/10 selection:text-slate-200"
++      style={{ backgroundColor: '#05070A' }}
++    >
+       {/* Header */}
+       <header className="fixed top-0 left-0 w-full z-50 p-8 flex justify-between items-center opacity-30 hover:opacity-80 transition-opacity duration-700">
+         <div className="flex items-center gap-3 cursor-pointer group">
+@@ -31,17 +37,13 @@ const Nightstand = () => {
+         </div>
+       </header>
+ 
+-      <AnimatePresence mode="wait">
+         {!isSubmitted ? (
+-          <motion.main
++          <main
+             key="input-state"
+-            initial={{ opacity: 0 }}
+-            animate={{ opacity: 1 }}
+-            exit={{ opacity: 0, y: 50, transition: { duration: 0.8, ease: "easeInOut" } }}
+             className="relative flex flex-col w-full h-screen"
+           >
+             {/* Top Section */}
+-            <section className="relative z-10 flex-1 flex flex-col items-center justify-end pb-16 w-full bg-midnight">
++            <section className="relative z-10 flex-1 flex flex-col items-center justify-end pb-16 w-full bg-midnight" style={{ backgroundColor: '#05070A' }}>
+               <div className="relative z-10 text-center px-6 max-w-3xl mx-auto space-y-4">
+                 <motion.h1 
+                   initial={{ opacity: 0, y: 20 }}
+@@ -72,36 +74,40 @@ const Nightstand = () => {
+             <div className="w-full h-32 -my-16 z-20 pointer-events-none bg-gradient-to-b from-midnight via-midnight/95 to-transparent"></div>
+ 
+             {/* Bottom Section (Input) */}
+-            <section className="relative z-0 flex-[1.4] w-full bg-gradient-to-b from-[#0a0d12] to-charcoal flex flex-col items-center pt-12">
++            <section className="relative z-30 flex-[1.4] w-full bg-gradient-to-b from-[#0a0d12] to-charcoal flex flex-col items-center pt-12">
+               <div className="absolute top-10 left-1/2 -translate-x-1/2 w-1/2 h-32 bg-slate-800/5 blur-[100px] rounded-full pointer-events-none"></div>
+               
+               <div className="w-full max-w-4xl px-8 md:px-16 h-full pb-20 relative flex flex-col items-center">
+                 <textarea
+                   autoFocus
++                  data-testid="thought-input"
+                   value={thought}
+                   onChange={(e) => setThought(e.target.value)}
+                   onKeyDown={handleKeyDown}
+-                  className="w-full h-full text-3xl md:text-4xl lg:text-5xl font-serif italic font-light text-slate-300 placeholder:text-slate-700/20 resize-none text-center leading-relaxed caret-slate-600 focus:outline-none bg-transparent scrollbar-hide"
++                  className="w-full h-full text-3xl md:text-4xl lg:text-5xl font-serif italic font-light text-slate-300 placeholder:text-slate-600 resize-none text-center leading-relaxed caret-slate-600 focus:outline-none bg-transparent scrollbar-hide"
+                   placeholder="Type your burden here..."
+                   spellCheck={false}
+                 />
+                 <div className="absolute bottom-0 left-0 w-full h-40 bg-gradient-to-t from-charcoal to-transparent pointer-events-none"></div>
+               </div>
+ 
+-              <div className="absolute bottom-10 text-center w-full opacity-30 hover:opacity-60 transition-opacity duration-500 cursor-pointer" onClick={handleRest}>
++              <div 
++                data-testid="rest-button"
++                className="absolute bottom-10 text-center w-full opacity-30 hover:opacity-60 transition-opacity duration-500 cursor-pointer" 
++                onClick={handleRest}
++              >
+                 <div className="text-[11px] font-serif italic tracking-widest text-slate-500">
+                   Press <span className="not-italic font-medium text-slate-400">Enter</span> to rest
+                 </div>
+               </div>
+             </section>
+-          </motion.main>
++          </main>
+         ) : (
+-          <motion.div
++          <div
+             key="success-state"
+-            initial={{ opacity: 0 }}
+-            animate={{ opacity: 1 }}
+-            transition={{ duration: 2, ease: "easeOut" }}
++            data-testid="success-message"
+             className="absolute inset-0 flex items-center justify-center bg-midnight z-50"
++            style={{ backgroundColor: '#05070A' }}
+           >
+              <div className="text-center space-y-6">
+                 <motion.div
+@@ -119,9 +125,8 @@ const Nightstand = () => {
+                   Your thought is secure. Rest now.
+                 </motion.p>
+              </div>
+-          </motion.div>
++          </div>
+         )}
+-      </AnimatePresence>
+ 
+       {/* Noise Overlay */}
+       <div 
+diff --git a/src/index.css b/src/index.css
+index 8ce6e47..b45069d 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -117,3 +117,7 @@ body {
+   background-color: var(--color-deep-void);
+   @apply text-slate-300 h-screen overflow-hidden flex flex-row selection:bg-cyber-cyan selection:text-black;
+ }
++
++#root {
++  @apply w-full h-full;
++}
+diff --git a/tests/verify.spec.ts b/tests/verify.spec.ts
+index f5ad25e..256ace6 100644
+--- a/tests/verify.spec.ts
++++ b/tests/verify.spec.ts
+@@ -1,29 +1,61 @@
+ import { test, expect } from '@playwright/test';
+ 
+-test('Nightstand flow verification', async ({ page }) => {
+-  // 1. The user is lying in bed at 11:45 PM... (Context setup, we just go to the page)
+-  await page.goto('/rest');
++test.describe('Nightstand App', () => {
+ 
+-  // Verify initial state
+-  await expect(page.getByText('What is keeping you awake?')).toBeVisible();
+-  
+-  // 3. In the single input field, the user types...
+-  const input = page.getByPlaceholder('Type your burden here...');
+-  await expect(input).toBeVisible();
+-  await input.fill('Send the Q3 projection PDF to Sarah first thing, and apologize for the delay.');
++  test('User Flow: Type thought and rest', async ({ page }) => {
++    await page.goto('/rest');
+ 
+-  // 4. The user taps the "Rest" action.
+-  // We can press Enter or click the text. Let's click the text to be explicit about "tapping".
+-  await page.getByText('Press Enter to rest').click();
++    // Wait for initial animation to complete
++    await page.waitForTimeout(2000); 
+ 
+-  // 5. The text visually seals itself away into the drawer...
+-  // Verify the input is no longer visible (or fading out) and success message appears.
+-  // We wait for the success message.
+-  await expect(page.getByText('Your thought is secure. Rest now.')).toBeVisible({ timeout: 10000 });
+-  await expect(input).not.toBeVisible();
++    // Verify key elements are visible with high contrast
++    const heading = page.getByText('What is keeping you awake?');
++    await expect(heading).toBeVisible();
++    
++    // Check input visibility using data-testid
++    const input = page.getByTestId('thought-input');
++    await expect(input).toBeVisible();
++    await expect(input).toHaveAttribute('placeholder', 'Type your burden here...');
+ 
+-  // 6. Relieved... 7. At 9:00 AM... (We stop here as per instructions for visual verification)
++    // Take screenshot of initial state to verify visibility
++    await page.screenshot({ path: 'initial_state.png' });
+ 
+-  // Capture screenshot
+-  await page.screenshot({ path: 'evidence.png' });
++    // Type thought
++    await input.fill('Send the Q3 projection PDF to Sarah first thing, and apologize for the delay.');
++
++    // Click rest button
++    const restButton = page.getByTestId('rest-button');
++    await expect(restButton).toBeVisible();
++    await restButton.click();
++
++    // Verify success state appears
++    const successMessage = page.getByTestId('success-message');
++    await expect(successMessage).toBeVisible({ timeout: 10000 });
++    
++    // Wait for success animation to settle
++    await page.waitForTimeout(2000);
++    
++    // Verify input is gone
++    await expect(input).not.toBeVisible();
++
++    await page.screenshot({ path: 'evidence.png' });
++  });
++
++  test('Deep Link: Load with rested state', async ({ page }) => {
++    // Test deep linking capability
++    await page.goto('/rest?state=rested');
++    
++    // Wait for animation
++    await page.waitForTimeout(2000);
++
++    // Verify success message is visible immediately
++    const successMessage = page.getByTestId('success-message');
++    await expect(successMessage).toBeVisible();
++    
++    // Verify input is NOT visible
++    const input = page.getByTestId('thought-input');
++    await expect(input).not.toBeVisible();
++    
++    await page.screenshot({ path: 'deep_link_state.png' });
++  });
+ });

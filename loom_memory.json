@@ -1,0 +1,91 @@
+{
+  "archive_count": 14,
+  "technical_learnings": [],
+  "past_projects": [
+    {
+      "name": "Pebble",
+      "niche": "Pebble is an architecture of release and return, designed to capture magic without the burden of organization. The application consists of a single, distraction-free view. When a parent opens the web ",
+      "pitch": "Pebble is an architecture of release and return, designed to capture magic without the burden of organization. The application consists of a single, distraction-free view. When a parent opens the web app, there are no menus, no past entries to scroll through, and no settings. The cursor is simply blinking in the center of the screen. The user types the exact, fleeting words spoken by their child. When they press the \"Drop\" button, the text dissolves into the background with a gentle, easing animation\u2014like a stone sinking into a pond. The memory is safely stored, but the app intentionally hides it to prevent the user from obsessing over curating a timeline. Pebble only resurfaces these memories once a year: on the child's birthday, it sends the parent a single, exquisitely formatted digital letter containing every pebble dropped over the past 365 days, meant to be read quietly over morning coffee.",
+      "timestamp": "2026-02-27 12:00:22"
+    },
+    {
+      "name": "Dusk",
+      "niche": "The architecture of this application is an exercise in psychological release. It operates entirely on a single, distraction-free view. When a user opens the application, they are greeted by an empty, ",
+      "pitch": "The architecture of this application is an exercise in psychological release. It operates entirely on a single, distraction-free view. When a user opens the application, they are greeted by an empty, boundless space and a gentle prompt asking what is weighing on their mind. The user types their lingering thoughts, tasks, or anxieties into a fluid, expanding text area. Once they have poured out the mental clutter, they press a single button to \"Surrender\" the thought. The text visually folds into itself, collapsing into a glowing ember, and is locked away behind a countdown timer set for the morning. The interface then clears entirely, leaving only a slow, rhythmic expansion and contraction of light to guide the user's breathing as they fall asleep.",
+      "timestamp": "2026-02-27 12:59:08"
+    },
+    {
+      "name": "Vessel",
+      "niche": "The architecture of this application is an exercise in visual intuition, designed to strip the anxiety and clinical tracking out of caring for living things in your home. It operates entirely on a sin",
+      "pitch": "The architecture of this application is an exercise in visual intuition, designed to strip the anxiety and clinical tracking out of caring for living things in your home. It operates entirely on a single, serene view devoid of numbers, charts, or calendars. When a user opens the app, they see a collection of elegant, abstract shapes, each representing a houseplant. When a physical plant is watered, the user taps its corresponding digital vessel, filling it to the brim. Over the precise cadence of that specific plant's needs\u2014be it four days or four weeks\u2014the digital water level slowly, imperceptibly lowers. To know what needs care, the user simply opens the application and looks for the empty vessels. It transforms plant care from a scheduled, nagging chore into a quiet, mindful morning observation.",
+      "timestamp": "2026-02-27 13:11:06"
+    },
+    {
+      "name": "Counter",
+      "niche": "The architecture of this application is an exercise in culinary presence. It operates as a singular, temporary holding space for tonight's meal. When a user provides a recipe, the application strips a",
+      "pitch": "The architecture of this application is an exercise in culinary presence. It operates as a singular, temporary holding space for tonight's meal. When a user provides a recipe, the application strips away every piece of digital noise\u2014the life stories, the advertisements, the pop-ups. What remains is a quiet, monolithic view. The application fundamentally respects the physical reality of cooking: the screen refuses to sleep, the ingredients rest quietly at the top of the viewport, and only one step of the instructions is brought into focus at a time. To accommodate dirty hands, the entire screen becomes a giant, forgiving surface; a cook needs only to tap anywhere with a knuckle or an elbow to advance to the next step. There are no archives, no meal planners, and no social ratings. It exists only for the duration of the cooking process, dissolving back into emptiness once the meal is plated.",
+      "timestamp": "2026-03-01 13:05:17"
+    },
+    {
+      "name": "Tether",
+      "niche": "The architecture of this application is an exercise in emotional gravity and visual proximity, designed to replace the guilt of \"personal CRMs\" and notification badges. It operates entirely on a singl",
+      "pitch": "The architecture of this application is an exercise in emotional gravity and visual proximity, designed to replace the guilt of \"personal CRMs\" and notification badges. It operates entirely on a single, fluid canvas free of dates, forms, or lists. When a user opens the application, they are greeted by a quiet void containing the names of people they wish to keep close. The application uses time as a gentle physical force: over weeks, names imperceptibly drift from the center of the screen toward the periphery, quietly losing their opacity. There are no alerts to remind the user they are \"overdue\" for a catch-up. Instead, the UX relies on a deeply tactile interaction. When the user shares a moment with someone in the real world, they open the space, tap and hold the drifting name, and physically drag it back to the center of the canvas. The architecture transforms the anxiety of neglected relationships into a peaceful, gestural ritual of pulling a loved one back into your warmth.",
+      "timestamp": "2026-03-01 20:03:57"
+    },
+    {
+      "name": "Lantern",
+      "niche": "The architecture of this application is an exercise in deliberate constraint, designed to eliminate the guilt of the infinite \"read later\" queue. It operates entirely on a singular, focused vessel. Wh",
+      "pitch": "The architecture of this application is an exercise in deliberate constraint, designed to eliminate the guilt of the infinite \"read later\" queue. It operates entirely on a singular, focused vessel. When a user discovers a long-form article they wish to consume, the application strips away the noise and holds the text. However, the system fundamentally rejects hoarding: it can only hold exactly one piece of writing at a time. To add a new piece, the user must either finish reading the current one or consciously choose to let it go. There are no tags, no folders, no archives, and no unread badges. It is a quiet room with a single chair, asking the user to commit to one narrative, fostering deep, undistracted immersion rather than anxious accumulation.",
+      "timestamp": "2026-03-01 20:19:06"
+    },
+    {
+      "name": "Vitrine",
+      "niche": "The architecture of this application is an exercise in delayed gratification and mindful consumption, designed to gently break the cycle of impulse shopping. It operates entirely as a singular, locked",
+      "pitch": "The architecture of this application is an exercise in delayed gratification and mindful consumption, designed to gently break the cycle of impulse shopping. It operates entirely as a singular, locked display case. When a user encounters a non-essential item they feel a sudden urge to buy online, they place it inside the application instead. The object is sealed behind a temporal barrier for seven days. The user can view the item, but the link to actually buy it remains functionally inaccessible until the time has passed. By the time the glass finally \"unlocks,\" the immediate dopamine spike of the impulse has almost always faded, allowing the user to quietly discard the desire or make the purchase with genuine intention.",
+      "timestamp": "2026-03-01 20:21:18"
+    },
+    {
+      "name": "Moat",
+      "niche": "Moat is an architecture of cognitive offloading and psychological boundary-setting. It operates entirely as a singular, temporal lockbox for professional anxiety. When a user feels work thoughts intru",
+      "pitch": "Moat is an architecture of cognitive offloading and psychological boundary-setting. It operates entirely as a singular, temporal lockbox for professional anxiety. When a user feels work thoughts intruding on their evening or weekend, the application offers a silent, cavernous void to type the lingering worry\u2014an unfinished email, a looming meeting, a difficult conversation. Upon submission, the thought is swallowed by the application and completely inaccessible until the user's predefined \"Working Hours\" begin again. It does not organize, tag, track, or prioritize; it simply acts as an emotional quarantine zone, capturing the mental trespasser so the user can return to their present life with empty hands and a quiet mind.",
+      "timestamp": "2026-03-01 20:34:03"
+    },
+    {
+      "name": "Parcel",
+      "niche": "Parcel is an architecture of quiet observation and temporal release, designed to eliminate the anxiety of panic-shopping and the guilt of forgotten conversations. It operates entirely as a singular, s",
+      "pitch": "Parcel is an architecture of quiet observation and temporal release, designed to eliminate the anxiety of panic-shopping and the guilt of forgotten conversations. It operates entirely as a singular, sealed envelope for each person you love. When a user hears a fleeting desire\u2014a passing comment about a ceramic mug, a favorite author, or a worn-out pair of gloves\u2014they drop the fragment into the person's parcel. The application immediately seals the fragment out of sight. It remains entirely inaccessible, preventing the stress of \"managing\" a list. Exactly fourteen days before the person's significant date, the parcel unlocks. It reveals a curated collection of half-forgotten whispers, transforming the chore of gift-hunting into a joyful rediscovery of your own attentiveness.",
+      "timestamp": "2026-03-02 16:04:23"
+    },
+    {
+      "name": "Spindle",
+      "niche": "Spindle is a node-based, spatial logic editor designed for narrative designers and interactive fiction writers. The architecture is split into a central infinite canvas and a contextual inspector pane",
+      "pitch": "Spindle is a node-based, spatial logic editor designed for narrative designers and interactive fiction writers. The architecture is split into a central infinite canvas and a contextual inspector panel. Users instantiate \"Nodes\" which act as discrete containers for dialogue or narrative events. By dragging pathways from the output port of one node to the input port of another, users construct complex, branching decision trees. The system's structural differentiator is its embedded logic engine: users can attach state-variables to the connecting paths, transforming a static flowchart into a compilable state machine. A built-in compiler constantly evaluates the graph, visually flagging orphaned nodes, infinite loops, or broken logic paths in real-time. The user can toggle from \"Build\" mode to \"Simulate\" mode, collapsing the entire canvas into a clean text-reader interface that allows them to playtest the exact narrative flow they just wired together.",
+      "timestamp": "2026-03-02 16:12:27"
+    },
+    {
+      "name": "Conduit",
+      "niche": "Conduit is a node-based financial forecasting environment designed to model cash flow as a fluid system. The application's architecture revolves around an infinite 2D canvas and a global timeline cont",
+      "pitch": "Conduit is a node-based financial forecasting environment designed to model cash flow as a fluid system. The application's architecture revolves around an infinite 2D canvas and a global timeline controller. Users construct a financial circuit by instantiating three types of nodes: Sources (income, retainers), Transformers (tax brackets, percentage splits), and Sinks (fixed expenses, savings goals). Users draw directional edges between these nodes to establish routing logic. The core engine calculates the flow of value across these edges based on the temporal parameters set within the Source nodes. A persistent timeline scrubber sits at the base of the viewport. As the user scrubs forward through weeks or months, the system simulates the transactions, dynamically updating the stored balances within the Sink nodes. If a Sink's required outflow exceeds its routed inflow at any point on the timeline, the node enters a deficit state, allowing the user to visually pinpoint exactly when and where a cash-flow crisis will occur.",
+      "timestamp": "2026-03-02 16:24:55"
+    },
+    {
+      "name": "Caliper",
+      "niche": "Caliper is a parametric quoting engine and margin calculator designed for freelance professionals and boutique agencies. The architecture is divided into a \"Logic Canvas\" and an \"Active Scrubber.\" On ",
+      "pitch": "Caliper is a parametric quoting engine and margin calculator designed for freelance professionals and boutique agencies. The architecture is divided into a \"Logic Canvas\" and an \"Active Scrubber.\" On the Logic Canvas, users construct their pricing model by defining independent variables (e.g., Base Rate, Project Scope, Revisions) and linking them to mathematical modifiers (e.g., Rush Timeline = +20% multiplier; Enterprise License = +$1,500 flat fee). The Active Scrubber translates this logic into a streamlined, interactive dashboard of sliders and toggles. As the user adjusts inputs on the fly\u2014often while live on a discovery call with a client\u2014the application instantly recalculates the gross project fee, projected hourly yield, and profit margin. The system ensures that pricing logic remains perfectly consistent, abstracting complex math away from the negotiation process so the user can focus entirely on scope.",
+      "timestamp": "2026-03-02 16:26:24"
+    },
+    {
+      "name": "Kerf",
+      "niche": "Kerf is a spatial optimization engine built for physical fabrication. The application is structured as a dual-pane workspace. On the left, an input manifest allows the user to define \"Stock\" (the raw ",
+      "pitch": "Kerf is a spatial optimization engine built for physical fabrication. The application is structured as a dual-pane workspace. On the left, an input manifest allows the user to define \"Stock\" (the raw material available) and \"Parts\" (the pieces required for the project), alongside global variables like blade thickness and edge banding. On the right, a dynamic 2D canvas renders the mathematical output of a bin-packing algorithm. The engine automatically arranges the parts onto the stock to minimize material waste. Users can toggle constraints\u2014such as forcing parts to align with the wood grain\u2014and the canvas instantly recalculates. Once a layout is finalized, the application generates a step-by-step sequential cut guide, detailing exactly where the user should make their first, second, and third cuts without trapping themselves into impossible angles.",
+      "timestamp": "2026-03-02 16:27:41"
+    },
+    {
+      "name": "Warp",
+      "niche": "Warp is a high-velocity, keyboard-driven logging environment built for documentary editors, videographers, and qualitative researchers to rapidly categorize raw media. The architecture revolves around",
+      "pitch": "Warp is a high-velocity, keyboard-driven logging environment built for documentary editors, videographers, and qualitative researchers to rapidly categorize raw media. The architecture revolves around a central media playback engine coupled to a real-time event listener and a dynamic, multi-track timeline. Rather than relying on standard mouse-driven scrubbing, users define a schema of semantic tags (e.g., \"B-Roll,\" \"Excellent Quote,\" \"Bad Audio\") and bind them to specific alphanumeric keys. As the video plays, the user strikes or holds these keys to inject instant temporal markers or sustained duration blocks directly onto the timeline below. The system continuously aggregates these inputs into an interactive manifest. Once logging is complete, the user can click any generated block to instantly snap the playhead to that timestamp, or export a structured CSV of the metadata for seamless ingestion into professional post-production software.",
+      "timestamp": "2026-03-02 16:31:36"
+    }
+  ],
+  "last_project_summary": null
+}

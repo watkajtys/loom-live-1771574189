@@ -18,8 +18,9 @@ class JulesClient(AgentProxy):
         logger.info(f"Tasking Jules API: {prompt}")
         expected_source = f"sources/github/{repo_owner}/{repo_name}"
         
-        logger.info(f"Waiting for source {expected_source} to be available to Jules...")
+        logger.info(f"Waiting for source {expected_source} and branch {branch} to be available to Jules...")
         source_found = False
+        branch_found = False
         for attempt in range(60): # 5 minute timeout for branch/source propagation
             time.sleep(5)
             page_token = None
@@ -29,17 +30,30 @@ class JulesClient(AgentProxy):
                 if not resp.ok:
                     break
                 data = resp.json()
-                if any(s.get("name") == expected_source for s in data.get("sources", [])):
-                    source_found = True
+                
+                for s in data.get("sources", []):
+                    if s.get("name") == expected_source:
+                        source_found = True
+                        # Check if branch is in the indexed list
+                        repo_info = s.get("githubRepo", {})
+                        branches = repo_info.get("branches", [])
+                        if any(b.get("displayName") == branch for b in branches):
+                            branch_found = True
+                            break
+                
+                if branch_found:
                     break
                 page_token = data.get("nextPageToken")
                 if not page_token:
                     break
-            if source_found:
-                logger.info("Source found by Jules!")
+            if branch_found:
+                logger.info(f"Source and branch {branch} found by Jules!")
                 break
         else:
-            logger.warning("Source not found by Jules, proceeding optimistically...")
+            if not source_found:
+                logger.warning("Source not found by Jules, proceeding optimistically...")
+            elif not branch_found:
+                logger.warning(f"Branch {branch} not yet indexed by Jules, proceeding optimistically (Jules may fall back to default branch)...")
 
         payload = {
             "prompt": prompt,
@@ -138,5 +152,8 @@ class JulesClient(AgentProxy):
                 logger.warning(f"Patch applied but with rejections in: {rej_files}")
         except Exception as e:
             logger.warning(f"git apply --reject had warnings/errors, but proceeding: {e}")
+        finally:
+            if os.path.exists(patch_path):
+                os.remove(patch_path)
             
         return "Code Implemented via Jules Patch"

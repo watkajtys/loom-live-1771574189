@@ -507,6 +507,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         if self.state.history:
             self.state.inspiration_target_route = self.state.history[-1].target_route
             self.state.inspiration_requires_design = self.state.history[-1].requires_design
+            # Restore happiness score for decision gate if resuming
+            self.happiness_score = self.state.history[-1].happiness_score
         
         while True:
             try:
@@ -518,14 +520,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
                 try:
                     self._step_design()
-                    self._step_implementation(branch_name)
+                    success_branch = self._step_implementation(branch_name)
                     self._step_reflection()
                 except Exception as step_error:
                     logger.error(f"Iteration aborted due to step error: {step_error}")
                     self.happiness_score = 0
                     self.last_critique = f"Aborted during phase {self.state.current_phase}: {step_error}"
+                    success_branch = branch_name
 
-                self._step_decision(branch_name)
+                self._step_decision(success_branch)
                 
                 time.sleep(10)
             except KeyboardInterrupt:
@@ -560,6 +563,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
     def _step_inspiration(self) -> str:
         self.state.current_phase = LoomPhase.INSPIRATION.value
+        
+        # RESUME LOGIC: Check if we are already in an active iteration
+        if self.state.history and self.state.history[-1].id == self.state.current_iteration and self.state.inspiration_goal:
+            branch_name = f"iter-{self.state.current_iteration}"
+            logger.info(f"[bold cyan]Resuming existing Iteration {self.state.current_iteration} on branch: {branch_name}[/bold cyan]", extra={"markup": True})
+            self.current_iteration_record = self.state.history[-1]
+            self.git.checkout_branch(branch_name)
+            return branch_name
+
         if not self.state.inspiration_goal:
             if not self.state.app_meta:
                 self.state.current_status = "Scanning market gaps for new Micro-SaaS opportunities..."
@@ -1383,11 +1395,22 @@ TASK:
                             with open(os.path.join("app", "design", ref_name), "wb") as f: f.write(img_bytes)
             self.state.save()
 
-    def _step_implementation(self, branch_name):
+    def _step_implementation(self, branch_name) -> str:
         self.state.current_phase = LoomPhase.IMPLEMENTATION.value
         
+        # Check if we already have happiness from a previous (partial) run
+        if self.current_iteration_record.happiness_score >= 8:
+            logger.info("Happiness already achieved in this iteration record. Skipping implementation.")
+            self.happiness_score = self.current_iteration_record.happiness_score
+            return self.current_iteration_record.successful_branch or branch_name
+
+        # Ensure we are on the correct agentic branch for this iteration
+        self.git.checkout_branch(branch_name)
+
         # 1. Autonomous Database Provisioning (The Data Soul)
+        # ... PB code ...
         if self.state.inspiration_data_model:
+            # (Rest of PB provisioning remains the same)
             logger.info("Overseer is provisioning PocketBase schema...")
             self.state.current_status = "Provisioning database schema..."
             self.state.save()
@@ -1437,27 +1460,27 @@ Example output:
                 logger.error(f"Failed to provision database: {e}")
 
         max_attempts = 50
-        current_attempt = 1
+        current_attempt = len(self.current_iteration_record.attempts) + 1
+        
         while current_attempt <= max_attempts:
             logger.info(f"--- Attempt {current_attempt}/{max_attempts} for Iteration {self.state.current_iteration} ---")
             self.state.current_status = f"Jules is coding (Attempt {current_attempt})..."
             self.state.save()
             
-            attempt_branch = f"{branch_name}-att{current_attempt}"
-            try: self.git._run(["git", "checkout", "-b", attempt_branch], cwd="app")
-            except Exception: self.git._run(["git", "checkout", attempt_branch], cwd="app")
+            # We stay on the same branch (branch_name) for all attempts in this iteration
+            # but we push before calling Jules so it sees our latest (or its latest) work.
+            self.git.push_branch(branch_name)
 
             task_prompt = self._get_jules_prompt(current_attempt)
-            self.git.push_branch(attempt_branch)
             owner, repo_name = self._get_repo_info()
             self.state.active_jules_prompt = task_prompt
             self.state.save()
 
             try:
-                self.jules.run_task(task_prompt, owner, repo_name, attempt_branch, 
+                self.jules.run_task(task_prompt, owner, repo_name, branch_name, 
                                    activity_callback=lambda act, url: self._update_jules_state(act, url))
                 self.git.commit(f"feat: implementation attempt {current_attempt}")
-                self.git.push_branch(attempt_branch)
+                self.git.push_branch(branch_name)
             except Exception as e:
                 logger.error(f"Build failed: {e}")
             finally:
@@ -1465,10 +1488,15 @@ Example output:
                 self.state.save()
             
             self._save_patch_artifact(current_attempt)
-            self._evaluate_iteration(current_attempt, attempt_branch)
+            self._evaluate_iteration(current_attempt, branch_name)
             
-            if self.happiness_score >= 8: break
+            if self.happiness_score >= 8: 
+                self.current_iteration_record.successful_branch = branch_name
+                self.state.save()
+                break
             current_attempt += 1
+
+        return self.current_iteration_record.successful_branch or branch_name
 
     def _get_jules_prompt(self, attempt):
         memory_context = ""
@@ -1535,6 +1563,11 @@ CRITICAL RULES:
             
             data_model_context = f"\nData Model (PocketBase Schema):\n{self.state.inspiration_data_model}\n" if self.state.inspiration_data_model else ""
             return f"""Refine the implementation. 
+
+CRITICAL CONTEXT: 
+The code currently in the repository IS the result of the previous attempt ({attempt-1}). 
+You are NOT starting from scratch. You must BUILD ON and FIX the existing code based on the feedback below.
+
 Meta: {self.state.app_meta}. 
 Route: {self.state.inspiration_target_route}. 
 {data_model_context}
@@ -1688,7 +1721,7 @@ Based on this outcome, provide a brief summary of what we learned. Format as a s
     def _step_decision(self, branch):
         self.state.current_phase = LoomPhase.DECISION.value
         if self.happiness_score >= 8:
-            logger.info("Happiness achieved! Merging to main.")
+            logger.info(f"Happiness achieved on branch {branch}! Merging to main.")
             self.git.checkout_branch("main")
             try:
                 self.git._run(["git", "merge", branch], cwd="app")
@@ -1707,7 +1740,9 @@ Based on this outcome, provide a brief summary of what we learned. Format as a s
                 logger.error(f"Merge to main failed: {e}. Resetting main.")
                 self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
         else:
-            logger.info("Max attempts reached. Abandoning iteration.")
+            logger.info("Max attempts reached or happiness not met. Abandoning iteration.")
+            if self.current_iteration_record:
+                self.current_iteration_record.abandoned = True
             self.git.checkout_branch("main")
             self.git._run(["git", "reset", "--hard", "origin/main"], cwd="app")
             self.git._run(["git", "clean", "-fd"], cwd="app")

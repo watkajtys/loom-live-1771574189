@@ -19,7 +19,17 @@ class GitClient(AgentProxy):
         
         if branch_name == "main":
             self._run(["git", "checkout", "main"], cwd="app")
-        else:
+            return
+
+        # Check if branch already exists locally
+        try:
+            # git show-ref or git rev-parse --verify
+            self._run(["git", "rev-parse", "--verify", branch_name], cwd="app")
+            logger.info(f"Checking out existing branch: {branch_name}")
+            self._run(["git", "checkout", branch_name], cwd="app")
+        except:
+            # Doesn't exist, create from main
+            logger.info(f"Creating new branch from main: {branch_name}")
             self._run(["git", "checkout", "main"], cwd="app")
             try:
                 self._run(["git", "branch", "-D", branch_name], cwd="app")
