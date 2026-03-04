@@ -706,11 +706,14 @@ A step-by-step description of a specific interaction (e.g., "The user drags the 
                         except Exception as e:
                             logger.warning(f"Failed to load last screenshot for PM review: {e}")
 
+                steering_context = self.state.repo_memory.get("active_steering", "")
+
                 next_prompt = f"""
 We just successfully implemented: '{last_goal}' at route '{last_route}'. 
 App Identity: {self.state.app_meta}
 Current Product Phase: {self.state.product_phase}
 {memory_context}
+{steering_context}
 
 Current Codebase Files:
 ```text
@@ -927,11 +930,9 @@ A step-by-step playwright assertion to prove it works.
         self.state.save()
         
         # 1. OVERSEER GENERATES DIVERGENT HYPOTHESES
-        steering_context = self.state.repo_memory.get("active_steering", "")
         brief_prompt = f"""
 You have invented the following product: '{self.state.inspiration_goal}'.
 Your task is to generate 5 wildly different 'Structural Hypotheses' for how this product could be realized.
-{steering_context}
 
 Avoid the 'Premium' trap (generic SaaS aesthetics). Instead, think about the specific materiality and UX density required:
 - Is it a dense industrial tool?
