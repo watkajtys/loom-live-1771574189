@@ -1054,7 +1054,12 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
         self.state.current_status = "Selecting the winning structural hypothesis..."
         self.state.save()
         
-        prompt = [f"""Select the best Structural Hypothesis for: '{self.state.inspiration_goal}'.
+        design_retry_count = 0
+        max_design_retries = 1
+        design_critique_context = ""
+
+        while design_retry_count <= max_design_retries:
+            prompt = [f"""Select the best Structural Hypothesis for: '{self.state.inspiration_goal}'.
 
 CRITICAL DIRECTIVES:
 1. **EMERGENT AESTHETICS:** Prioritize the design that 'feels' the most professional and intentional, even if it diverges from its original hypothesis brief. 
@@ -1064,26 +1069,69 @@ CRITICAL DIRECTIVES:
 TASK:
 1. Analyze the strengths and weaknesses of each design.
 2. Explain which one best captures the 'soul' of the product.
-3. Output ONLY the winning integer index (1-{len(base_variants)}) on the very last line."""]
-        content = []
-        for idx, var in enumerate(base_variants):
-            prompt.append(f"Image {idx+1}: {var['brief']}")
-            if var.get("img"):
-                content.append({"mime_type": "image/png", "data": var["img"]})
-        
-        try:
-            review_response = self._generate_content_with_retry(self.vision_model, [*prompt, *content])
-            self.current_iteration_record.seed_review_critique = review_response.text.strip()
+3. **QUALITY THRESHOLD:** If NONE of these designs are professional or high-quality enough to be the foundation of a real product, output INDEX 0.
+4. Output ONLY the winning integer index (0-{len(base_variants)}) on the very last line."""]
+            content = []
+            for idx, var in enumerate(base_variants):
+                prompt.append(f"Image {idx+1}: {var['brief']}")
+                if var.get("img"):
+                    content.append({"mime_type": "image/png", "data": var["img"]})
             
             try:
-                best_base_idx_raw = int(''.join(filter(str.isdigit, review_response.text.split("\n")[-1]))) - 1
-                best_base_idx = max(0, min(len(base_variants)-1, best_base_idx_raw))
-            except:
+                review_response = self._generate_content_with_retry(self.vision_model, [*prompt, *content])
+                review_text = review_response.text.strip()
+                self.current_iteration_record.seed_review_critique = review_text
+                
+                try:
+                    best_base_idx_raw = int(''.join(filter(str.isdigit, review_text.split("\n")[-1])))
+                except:
+                    best_base_idx_raw = 1 # Default to 1 if we can't parse
+                
+                if best_base_idx_raw == 0 and design_retry_count < max_design_retries:
+                    logger.warning("Overseer REJECTED all designs. Triggering a fresh design pass with critique...")
+                    design_critique_context = f"\n### PREVIOUS DESIGN CRITIQUE (WHY THE LAST 5 FAILED):\n{review_text}\n"
+                    
+                    # Wipe and re-generate
+                    self.current_iteration_record.base_seed_paths = [None] * 5
+                    self.current_iteration_record.base_variants_data = None
+                    
+                    # Re-run seed generation with critique context
+                    design_prompt = f"Task: {self.state.inspiration_goal}\n\nTarget Route: {self.state.inspiration_target_route}\n{design_critique_context}"
+                    results = []
+                    for i in range(5):
+                        if i > 0: time.sleep(5)
+                        brief = briefs[i]
+                        try:
+                            unique_project_name = f"Loom {self.state.current_iteration} - Reroll {i+1}"
+                            p_id = self.stitch.create_project(unique_project_name)
+                            logger.info(f"Rerolling Seed {i+1}/5 in Project {p_id}...")
+                            screens = self.stitch.generate_or_edit_screen(description=f"{design_prompt}\n\nSTRUCTURAL HYPOTHESIS: {brief}", project_id=p_id)
+                            if screens:
+                                win = screens[0]
+                                ts = int(time.time())
+                                seed_rel_path = None
+                                for img_idx, img_bytes in enumerate(win["images"]):
+                                    path = f"artifacts/iter_{self.state.current_iteration}_reroll_{i+1}_{img_idx}_{ts}.png"
+                                    with open(f"viewer/public/{path}", "wb") as f: f.write(img_bytes)
+                                    if img_idx == 0: seed_rel_path = path
+                                self.current_iteration_record.base_seed_paths[i] = seed_rel_path
+                                self.state.save()
+                                results.append({"project_id": p_id, "screen_id": win["screen_id"], "html": win["html"], "img": win["images"][0], "img_path": seed_rel_path, "index": i, "brief": brief})
+                        except Exception as e:
+                            logger.error(f"Failed to generate reroll seed {i+1}: {e}")
+                    
+                    base_variants = [r for r in results if r is not None]
+                    if not base_variants: raise Exception("Reroll failed to generate any base seeds.")
+                    design_retry_count += 1
+                    continue # Start the voting process again with the new seeds
+                
+                best_base_idx = max(0, min(len(base_variants)-1, best_base_idx_raw - 1))
+                break # Found a winner or reached max retries
+            except Exception as e:
+                logger.warning(f"Vision critique failed: {e}. Falling back to first seed.")
+                self.current_iteration_record.seed_review_critique = f"Vision critique failed: {e}."
                 best_base_idx = 0
-        except Exception as e:
-            logger.warning(f"Vision critique failed (timeout or API error): {e}. Falling back to first seed.")
-            self.current_iteration_record.seed_review_critique = f"Vision critique failed: {e}. Defaulted to Seed 1."
-            best_base_idx = 0
+                break
             
         winning_seed = base_variants[best_base_idx]
         self.state.stitch_project_id = winning_seed["project_id"]
