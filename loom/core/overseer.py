@@ -1054,7 +1054,17 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
         self.state.current_status = "Selecting the winning structural hypothesis..."
         self.state.save()
         
-        prompt = [f"Select the best Structural Hypothesis for: '{self.state.inspiration_goal}'.\n1. Analyze the strengths and weaknesses of each design.\n2. Explain which one best captures the 'soul' of the product.\n3. Output ONLY the integer index (1-{len(base_variants)}) on the very last line."]
+        prompt = [f"""Select the best Structural Hypothesis for: '{self.state.inspiration_goal}'.
+
+CRITICAL DIRECTIVES:
+1. **EMERGENT AESTHETICS:** Prioritize the design that 'feels' the most professional and intentional, even if it diverges from its original hypothesis brief. 
+2. **PRODUCT SOUL:** Which design feels like it has a point of view? Look for superior use of space, visual hierarchy, and a clear 'vibe'.
+3. **UTILITY:** Choose the one that feels like a real tool you'd want to use.
+
+TASK:
+1. Analyze the strengths and weaknesses of each design.
+2. Explain which one best captures the 'soul' of the product.
+3. Output ONLY the winning integer index (1-{len(base_variants)}) on the very last line."""]
         content = []
         for idx, var in enumerate(base_variants):
             prompt.append(f"Image {idx+1}: {var['brief']}")
@@ -1134,7 +1144,18 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             
             if valid_layouts:
                 # 6-Pack Vote: Include the Base Seed as Image 1
-                prompt = [f"Select the absolute best layout for: '{self.state.inspiration_goal}'.\nImage 1 is your current baseline. Images 2-6 are new variations.\n1. Evaluate the usability and intentionality of each layout.\n2. Choose the winner.\n3. Output ONLY the integer index (1-6) on the very last line."]
+                prompt = [f"""Select the absolute best layout for: '{self.state.inspiration_goal}'.
+Image 1 is your current baseline. Images 2-6 are new variations.
+
+CRITICAL DIRECTIVES:
+1. **BEAUTY & COHESION:** Do not just look for layout changes. Look for the variant that is the most visually balanced and 'high-end' in its execution.
+2. **INTENTIONALITY:** Which design feels the most like it was crafted by a senior designer with a strong vision?
+3. **SOUL:** If one design is technically accurate but another 'feels' better, choose the one that feels better.
+
+TASK:
+1. Evaluate the usability, balance, and aesthetic soul of each layout.
+2. Choose the definitive winner.
+3. Output ONLY the winning integer index (1-6) on the very last line."""]
                 layout_content = []
                 
                 # Image 1: The Baseline (Winner of previous phase)
@@ -1250,7 +1271,18 @@ Provide 5 concise (1-2 sentence) design briefs. Label them [BRIEF 1] through [BR
             
             if valid_themes:
                 # 6-Pack Vote: Include the selected Layout as Image 1
-                prompt = [f"Select the absolute best visual theme for: '{self.state.inspiration_goal}'.\nImage 1 is your current baseline. Images 2-6 are new color/typography explorations.\n1. Pick the best theme.\n2. Define [APP_META] (Name, Palette, Typography) for this winning choice.\nOutput index (1-6) on last line."]
+                prompt = [f"""Select the absolute best visual theme for: '{self.state.inspiration_goal}'.
+Image 1 is your current baseline. Images 2-6 are new color/typography explorations.
+
+CRITICAL DIRECTIVES:
+1. **VISUAL GRAVITAS:** Prioritize the theme that gives the product the most weight and professional 'polish'.
+2. **EMERGENT VIBE:** Which combination of colors and type feels the most 'right' for this specific product's soul?
+3. **COHESION:** Look for harmony between the layout and the new theme.
+
+TASK:
+1. Pick the best theme.
+2. Define [APP_META] (Name, Palette, Typography) for this winning choice. Ensure Name is concise.
+3. Output the winning integer index (1-6) on the very last line."""]
                 theme_content = []
                 
                 # Image 1: The Baseline (Selected Layout from previous phase)
