@@ -90,10 +90,10 @@ class Overseer:
         else:
             genai.configure(api_key=api_key)
             # Principal Overseer (Logic & Planning)
-            self.model = genai.GenerativeModel('gemini-3.1-pro')
+            self.model = genai.GenerativeModel('gemini-3.1-pro-preview')
             # Specialized Reviewers (Fast & Efficient)
-            self.arch_model = genai.GenerativeModel('gemini-3.1-flash')
-            self.vision_model = genai.GenerativeModel('gemini-3.1-flash')
+            self.arch_model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
+            self.vision_model = genai.GenerativeModel('gemini-3.1-flash-lite-preview')
 
     @retry(
         stop=stop_after_attempt(5),
