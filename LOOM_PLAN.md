@@ -130,16 +130,16 @@ The Overseer now performs a triage check during brainstorming. If a feature is p
 
 ### B. Two-Pass Design System (Layout then Theme)
 To ensure high-quality UI without overwhelming the model, Iteration 1 now executes a two-stage design process:
-1. **Layout Pass**: Stitch generates 3 structural variants. Overseer selects the best layout.
-2. **Theme Pass**: Stitch generates 3 color/typography variants of that layout (including the original as a control). Overseer selects the winner and locks in the `APP_META`.
+1. **Layout Pass**: Stitch generates 5 structural variants. Overseer selects the best layout.
+2. **Theme Pass**: Stitch generates 5 color/typography variants of that layout. Overseer selects the winner and locks in the `APP_META`.
 
 ### C. Persistent Repo Memory (Reflection Pass)
 At the end of every iteration, the Overseer performs a "Reflection Pass," logging technical successes and failures into a persistent `repo_memory` KV store. These learnings are injected into all future brainstorming and implementation prompts to ensure the agents "learn" over time.
 
-### D. Quality Gates: Taste & Touch
-We are moving beyond static vision towards holistic product management:
-1. **Taste Test**: The Overseer evaluates the final app against a "Premium Product" standard. If "vibe" is low, the next goal defaults to a UI Polish pass.
-2. **Touch Test (Planned)**: An interactive Playwright agent will exercise the app's logic (clicking sliders, submitting forms) to verify UX functionality before merging.
+### D. Agentic Branching & Indexing Sync
+To ensure cumulative progress, the factory now uses a single **Agentic Branch** per iteration.
+*   **The Ledger:** All implementation attempts are committed to this branch, providing Jules with the full context of its previous work.
+*   **Indexing Sync:** The `JulesClient` now polls the `/sources` API to confirm branch indexing before starting a session, eliminating "blank slate" hallucinations.
 
 ---
 
@@ -149,8 +149,9 @@ To scale Project Loom from a toy to an enterprise factory, we plan to implement 
 
 ### A. "Invasion Mode" (Existing Codebases)
 Instead of starting from a blank canvas, Loom will be able to take over existing, legacy codebases.
-1. **Discovery Agent**: Runs local AST parsers and visual crawlers to reverse-engineer an existing app's architecture and design system, automatically generating the initial `APP_META.md`.
-2. **Ticket Ingestion**: Instead of open-ended brainstorming, the Overseer works directly off a GitHub Issues or Jira backlog.
+1. **The Surveyor (AST Parsing):** Runs local AST parsers (e.g., `ts-morph`) to generate a `CODEBASE_MAP.json` detailing exports, imports, and component hierarchies.
+2. **The Archeologist (Vision + DOM):** Uses a Vision Agent alongside a DOM Inspector to bridge the gap between code and UI, mapping visual elements directly to source files.
+3. **Ticket Ingestion:** Instead of open-ended brainstorming, the Overseer works directly off a GitHub Issues or Jira backlog.
 
 ### B. Test-Driven Execution (TDE)
 Static screenshots are insufficient for verifying complex UI logic (e.g., dropdowns, modals, state changes).
@@ -164,10 +165,9 @@ To prevent design drift over multiple iterations, Loom will generate a foundatio
 * **Phase 1**: The Overseer extracts a massive, robust `APP_META` from this UI Kit, ensuring the app remains perfectly cohesive even at Iteration 50.
 
 ### D. Specialized Sentries
-*   **The Lighthouse Agent (a11y):** Fails builds if Jules uses non-semantic HTML (`<div>` instead of `<button>`) or breaks accessibility standards.
-*   **The Web Vitals Sentry:** Fails builds if Jules imports massive libraries that spike the Vite bundle size unexpectedly.
-*   **The Janitor:** A garbage collection agent that runs periodically to find and delete unused React components and dead code via tools like `ts-prune`.
-*   **The AppSec Reviewer:** Scans patches exclusively for XSS vectors, insecure local storage, and hardcoded secrets.
+*   **The Friction Report (UX Taste):** A specialized sub-agent that "plays" with the app using Playwright to detect jank, small tap targets, or confusing flows.
+*   **The Dependency Auditor (Bloat Loop):** Fails builds if Jules imports massive libraries (e.g., `moment.js`) for trivial tasks, enforcing a "Vanilla-First" philosophy.
+*   **The Janitor:** A garbage collection agent that runs periodically to find and delete unused React components and dead code.
 
 ---
 
@@ -175,22 +175,17 @@ To prevent design drift over multiple iterations, Loom will generate a foundatio
 
 We are evolving from an "App Builder" into a "Multiplexed Product Studio." This phase focuses on making the apps "real" (Persistence) and "live" (Shared Hosting).
 
-### A. Persistent Persistence (PocketBase)
+### A. The Director's Gate (Manual Breakpoints)
+To transition from an "Autonomous Factory" to a "Collaborative Studio," we introduce manual approval gates.
+*   **Checkpoints:** The Overseer pauses and awaits a "Go/No-Go" after **Concept Brainstorming**, **Design Selection**, and **Final Validation** before merging to `main`.
+
+### B. Persistent Persistence (PocketBase)
 Apps are no longer ephemeral frontends. Every Loom project now has a "Data Soul."
-*   **Zero-Key Automation:** Instead of relying on manual Firebase setup, the Overseer autonomously spins up a PocketBase instance as a Docker sidecar for every app.
+*   **Zero-Key Automation:** The Overseer autonomously spins up a PocketBase instance as a Docker sidecar for every app.
 *   **Data Model Phase:** The Overseer defines a `[DATA_MODEL]` (collections/fields) during Inspiration and generates a `pb_schema.json`.
-*   **Full-Stack Pods:** The output is a self-contained unit: a Vite React app communicating directly with its own local PocketBase instance.
 
-### B. Shared Studio Hosting (Hetzner)
-Moving away from dedicated VPS instances to a cost-effective shared model.
-*   **Reverse Proxy Automation:** The agent manages a central Nginx instance on a single Hetzner box.
-*   **Subdomain Logic:** New projects are automatically deployed to `project-name.studio-domain.com`.
-*   **Docker Sandboxing:** Use `docker-compose.yml` to manage the multi-container pod (React + PocketBase) for each project.
-
-### C. Agentic QA (Interactive Verification)
-Replacing static screenshots with a "Living" verification loop.
-*   **Browser Agent:** The Overseer can "drive" a Playwright browser instance to click buttons, fill forms, and verify state transitions.
-*   **Happiness 2.0:** The score is now a composite of Visual Fidelity (Flash), Architectural Integrity (Flash), and **Functional Success** (Playwright Agent).
+### C. Shared Studio Hosting (Hetzner)
+Moving away from dedicated VPS instances to a cost-effective shared model using Reverse Proxy Automation and Subdomain Logic.
 
 ### D. Operational Efficiency
 *   **Model Tiering:** Use Gemini 3.1 Pro for high-level "Brain" tasks and Gemini 3 Flash for high-volume "Reviewer" tasks.
