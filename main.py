@@ -129,6 +129,30 @@ def start_viewer_server():
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
+        def do_POST(self):
+            if self.path == "/api/steer":
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                try:
+                    import json
+                    data = json.loads(post_data)
+                    note = data.get("note")
+                    if note:
+                        state = ConductorState.load()
+                        state.pending_steer.append(note)
+                        state.save()
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"status": "ok"}).encode())
+                        return
+                except Exception as e:
+                    logger.error(f"Failed to process steering POST: {e}")
+            
+            self.send_response(400)
+            self.end_headers()
+
     class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         allow_reuse_address = True
             

@@ -70,6 +70,8 @@ class ConductorState(BaseModel):
     active_jules_action: Optional[str] = None
     current_status: str = "Idle"
     current_phase: str = "Inspiration"
+    pending_steer: List[str] = []
+    steering_history: List[dict] = []
     live_logs: List[str] = []
     
     def save(self):

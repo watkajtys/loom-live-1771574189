@@ -510,6 +510,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         
         while True:
             try:
+                # Major Gate: Consume steering notes for this iteration
+                self._consume_steering()
+
                 # _step_inspiration now handles full iteration setup (incrementing, branch, record)
                 branch_name = self._step_inspiration()
 
@@ -531,6 +534,30 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 logger.error(f"Critical loop error: {e}")
                 time.sleep(30)
 
+    def _consume_steering(self):
+        """Merges all pending steering notes into a single string, moves them to history, and clears the pending list."""
+        if not self.state.pending_steer:
+            self.state.repo_memory["active_steering"] = ""
+            return
+
+        combined_notes = "\n".join([f"- {note}" for note in self.state.pending_steer])
+        steering_block = f"\n### [DIRECTOR'S STEERING FOR THIS ITERATION]\n{combined_notes}\n"
+        
+        # Move to history
+        for note in self.state.pending_steer:
+            self.state.steering_history.append({
+                "note": note,
+                "applied_at_iteration": self.state.current_iteration + 1,
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        # Clear pending
+        self.state.pending_steer = []
+        self.state.repo_memory["active_steering"] = steering_block
+        self.state.save()
+        
+        logger.info(f"Consumed {len(combined_notes.splitlines())} steering notes for the next iteration.")
+
     def _step_inspiration(self) -> str:
         self.state.current_phase = LoomPhase.INSPIRATION.value
         if not self.state.inspiration_goal:
@@ -541,6 +568,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 
                 import random
                 entropy_seed = random.getrandbits(64)
+
+                steering_context = self.state.repo_memory.get("active_steering", "")
 
                 past_history = ""
                 if self.state.history:
@@ -568,6 +597,7 @@ Your goal is to build a "Beautifully Simple Video Review Studio" designed specif
 
 [Studio Entropy Seed: {entropy_seed}]
 {past_history}
+{steering_context}
 
 CRITICAL DIRECTIVES:
 1. **TIMELINE-FIRST FEEDBACK:** The core of the product is the timeline. It must be "Super Easy" to scrub through a video and leave a comment at a precise timestamp.
@@ -897,9 +927,11 @@ A step-by-step playwright assertion to prove it works.
         self.state.save()
         
         # 1. OVERSEER GENERATES DIVERGENT HYPOTHESES
+        steering_context = self.state.repo_memory.get("active_steering", "")
         brief_prompt = f"""
 You have invented the following product: '{self.state.inspiration_goal}'.
 Your task is to generate 5 wildly different 'Structural Hypotheses' for how this product could be realized.
+{steering_context}
 
 Avoid the 'Premium' trap (generic SaaS aesthetics). Instead, think about the specific materiality and UX density required:
 - Is it a dense industrial tool?
