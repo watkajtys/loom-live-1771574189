@@ -43,7 +43,7 @@ class Overseer:
         self.git = GitClient()
         
         # Use service name for PocketBase inside Docker
-        pb_host = os.getenv("PB_HOSTNAME", "pocketbase")
+        pb_host = os.getenv("PB_HOSTNAME", "loom-pocketbase")
         self.pb_url = f"http://{pb_host}:8090"
         
         # Use Mock Jules if requested

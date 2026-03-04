@@ -33,7 +33,7 @@ class DatabaseProvisioner:
                     logger.info(f"Successfully authenticated as PocketBase Superuser via {url.split('/')[-2]}.")
                     return True
                 else:
-                    logger.debug(f"Auth failed for {url} ({resp.status_code})")
+                    logger.debug(f"Auth failed for {url} ({resp.status_code}): {resp.text}")
             except requests.exceptions.ConnectionError:
                 logger.warning(f"PocketBase server is unreachable at {url}. Is the Docker container running?")
                 raise Exception("PocketBase unreachable")

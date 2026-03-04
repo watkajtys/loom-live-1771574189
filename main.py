@@ -40,23 +40,24 @@ def db_doctor(pb_host="loom-pocketbase"):
             if result.returncode == 0:
                 # Container is ready for CLI commands
                 # Try modern v0.23+ superuser upsert
-                cmd_new = ["docker", "exec", pb_host, "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password"]
+                cmd_new = ["docker", "exec", pb_host, "pocketbase", "superuser", "upsert", "admin@loom.local", "loom_secure_password", "--dir=/pb_data"]
                 # Try legacy v0.22 and below admin upsert
-                cmd_old = ["docker", "exec", pb_host, "pocketbase", "admin", "create", "admin@loom.local", "loom_secure_password"]
+                cmd_old = ["docker", "exec", pb_host, "pocketbase", "admin", "create", "admin@loom.local", "loom_secure_password", "--dir=/pb_data"]
                 
                 try:
-                    subprocess.run(cmd_new, check=True, capture_output=True)
+                    subprocess.run(cmd_new, check=True, capture_output=True, text=True)
                     logger.info(f"PocketBase Superuser configured successfully via 'superuser upsert' on {pb_host}.")
                     return True
                 except subprocess.CalledProcessError:
                     try:
-                        subprocess.run(cmd_old, check=True, capture_output=True)
+                        subprocess.run(cmd_old, check=True, capture_output=True, text=True)
                         logger.info(f"PocketBase Superuser configured successfully via 'admin create' on {pb_host}.")
                         return True
                     except subprocess.CalledProcessError as e:
                         logger.warning(f"Both superuser/admin creation methods failed: {e.stderr}")
-                        # If both fail, maybe the account already exists and 'create' won't overwrite it
-                        return True 
+                        if e.stderr and "already exists" in e.stderr.lower():
+                            return True
+                        # Don't return True otherwise. Let it loop and try again.
         except Exception as e:
             if i == max_retries - 1:
                 logger.error(f"Failed to configure PocketBase superuser on {pb_host} after {max_retries} attempts: {e}")
